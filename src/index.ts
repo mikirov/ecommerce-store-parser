@@ -36,7 +36,7 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
         //TODO: set proper response statuses
         res.status(400).send("Please specify domain to be added to the scraper list")
     }
-    let uri = req.body.domainUri.trim();
+    let uri: string = req.body.domainUri.trim();
     uri  = url.parse(uri,true).host || uri;
     if(!uri)
     {
@@ -58,25 +58,30 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
         return;
     }
     console.log(data)
-
     let products: Product[] = [];
     data.products.forEach((productData: ShopifyProductData) => {
-        //TODO: ask if we want to add a separate product for each variation
+        console.log(productData.variants);
         const product: Product = {
-            name: parse(productData.title).text.replace(/\n/g, " ") || "",
-            price: parseFloat(productData.variants?.[0].price) || 0, // TODO: check if exists
-            link: uri + "/products/" + productData.handle,
-            description: parse(productData.body_html).text.replace(/\n/g, " ") || "", //TODO: parse html
+            name: parse(productData.title).text.replace(/\n/g, " ") || "unknown",
+            price: productData.variants
+                && productData.variants.length > 0
+                && productData.variants[0].price
+                && parseFloat(productData.variants[0].price) || 0,
+            link: productData.handle && uri + "/products/" + productData.handle || "unknown",
+            brand: productData.vendor || "unknown",
+            description: productData.body_html && parse(productData.body_html).text.replace(/\n/g, " ") || "unknown",
             domain: uri,
-            images: productData.images.map((img: ShopifyProductImage) => img && img.src)
+            images: productData.images
+                && productData.images.length > 0
+                && productData.images.map((img: ShopifyProductImage) => img && img.src) || []
         }
-        products.push(product)
+        products.push(product);
     })
 
     const docRef =  db.collection('products').doc(uri);
     await docRef.set(Object.assign({}, products), {merge: true})
 
-    res.status(200).send("OK")
+    res.status(200).send("OK");
 
 })
 
