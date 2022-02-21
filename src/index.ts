@@ -141,6 +141,6 @@ app.get("/products/:domainUri", async (req, res) => {
     res.status(200).send(products);
 });
 
-app.listen(PORT, () => {
+app.listen(process.env.PORT || PORT, () => {
     console.log(`App running on port: ${PORT}`)
 })
