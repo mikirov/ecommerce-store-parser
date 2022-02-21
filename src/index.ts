@@ -117,7 +117,7 @@ app.get("/products/:domainUri", async (req, res) => {
         return;
     }
 
-    const uri = req.body.domainUri.trim().toLowerCase()
+    const uri = req.params.domainUri.trim().toLowerCase()
     if(/([a-z0-9]+\.)*[a-z0-9]+\.[a-z]+/.test(uri) == false)
     {
         res.status(400).send("Please send a domain in the format www.something.com");
@@ -128,7 +128,7 @@ app.get("/products/:domainUri", async (req, res) => {
         res.status(400).send("Invalid domain uri.");
         return;
     }
-    const docRef: FirebaseFirestore.DocumentReference = db.collection('products').doc(req.params.domainUri);
+    const docRef: FirebaseFirestore.DocumentReference = db.collection('products').doc(uri);
     const docSnapshot: FirebaseFirestore.DocumentSnapshot = await docRef.get();
     if(!docSnapshot.exists)
     {
