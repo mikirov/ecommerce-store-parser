@@ -1,4 +1,4 @@
-export interface Product
+interface Product
 {
     name: string;
     link: string;
@@ -9,3 +9,5 @@ export interface Product
     images: string[];
 
 }
+
+export {Product}

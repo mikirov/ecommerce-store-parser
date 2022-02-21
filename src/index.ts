@@ -3,10 +3,15 @@ import fetch from 'node-fetch';
 import * as url from "url";
 import { parse } from 'node-html-parser';
 import {Product} from "./product";
+
+
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore} from 'firebase-admin/firestore';
 
+import cors from 'cors';
+
 import * as serviceAccount from '../firebase-service-account.json';
+import { ShopifyProductData , ShopifyProductImage} from './shopifyproductdata';
 const firebaseServiceAccount = {               //clone json object into new object to make typescript happy
     type: serviceAccount.type,
     projectId: serviceAccount.project_id,
@@ -25,11 +30,16 @@ initializeApp({
 });
 
 const db = getFirestore();
+
 const PORT = 4000;
 
 let app: Express.Application = Express();
 app.use(Express.urlencoded({ extended: false }));
-
+//TODO: set up cors options
+const options: cors.CorsOptions = {
+    origin: "*",
+};
+app.use(cors(options));
 app.put("/domain", async (req: Express.Request, res: Express.Response) => {
     if(!req.body || !req.body.domainUri)
     {
@@ -42,7 +52,6 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
     {
         res.status(400).send("Invalid domain uri.");
     }
-    console.log(uri);
     //TODO: abstract for different store types
     //TODO: get store type from uri
     const response = await fetch("https://" + uri + "/products.json"); //TODO: http or https?
@@ -57,10 +66,8 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
         res.status(500).send("Could not find any products for given domain")
         return;
     }
-    console.log(data)
     let products: Product[] = [];
     data.products.forEach((productData: ShopifyProductData) => {
-        console.log(productData.variants);
         const product: Product = {
             name: parse(productData.title).text.replace(/\n/g, " ") || "unknown",
             price: productData.variants
@@ -104,8 +111,6 @@ app.get("/products/:domainUri", async (req, res) => {
     res.status(200).send(products);
 });
 
-// Start server (app.listen can also be used)
 app.listen(PORT, () => {
-    console.log(`Running at http://localhost:${PORT}/`)
-});
-
+    console.log(`App running on port: ${PORT}`)
+})

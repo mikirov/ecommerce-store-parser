@@ -1,19 +1,21 @@
 interface ShopifyProductData
 {
-    title: string;
-    handle: string;
-    body_html: string;
-    vendor: string;
-    variants: ShopifyProductVariant[];
-    images: ShopifyProductImage[];
-}
+  title: string;
+  handle: string;
+  body_html: string;
+  vendor: string;
+  variants: ShopifyProductVariant[];
+  images: ShopifyProductImage[];
+};
 
 interface ShopifyProductVariant
 {
-    price: string;
-}
+  price: string;
+};
 
 interface ShopifyProductImage
 {
-    src: string;
-}
+  src: string;
+};
+
+export {ShopifyProductData, ShopifyProductVariant, ShopifyProductImage};
