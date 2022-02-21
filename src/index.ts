@@ -44,20 +44,31 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
     if(!req.body || !req.body.domainUri)
     {
         //TODO: set proper response statuses
-        res.status(400).send("Please specify domain to be added to the scraper list")
+        res.status(400).send("Please specify domain to be added to the scraper list");
+        return;
     }
-    let uri: string = req.body.domainUri.trim();
-    uri  = url.parse(uri,true).host || uri;
-    if(!uri)
+
+    let uri = req.body.domainUri.trim().toLowerCase();
+    if(!uri || uri === "")
     {
         res.status(400).send("Invalid domain uri.");
+        return;
     }
+    if(/^[a-z0-9]+\.[a-z]+$/.test(uri) == false)
+    {
+        res.status(400).send("Please send a domain in the format [name].[extention]");
+        return;
+    }
+    console.log(uri);
+
     //TODO: abstract for different store types
     //TODO: get store type from uri
-    const response = await fetch("https://" + uri + "/products.json"); //TODO: http or https?
+    //TODO: check valid url
+    const response = await fetch("https://www." + uri + "/products.json");
     if(!response)
     {
         res.status(500).send("Could not find information for given domain");
+        return;
     }
 
     const data = await response.json();
@@ -98,12 +109,24 @@ app.get("/products/:domainUri", async (req, res) => {
         res.status(400).send("please specify domain to get products for");
         return;
     }
-    console.log(req.params.domainUri);
+
+    const uri = req.body.domainUri.trim().toLowerCase()
+    if(/([a-z0-9]+\.)*[a-z0-9]+\.[a-z]+/.test(uri) == false)
+    {
+        res.status(400).send("Please send a domain in the format www.something.com");
+        return;
+    }
+    if(!uri)
+    {
+        res.status(400).send("Invalid domain uri.");
+        return;
+    }
     const docRef: FirebaseFirestore.DocumentReference = db.collection('products').doc(req.params.domainUri);
     const docSnapshot: FirebaseFirestore.DocumentSnapshot = await docRef.get();
     if(!docSnapshot.exists)
     {
-        res.status(404).send("Products not found for domain");
+        res.status(404).send("Products not found for domain or domain data doesn't exist yet.");
+        return;
     }
     const data: FirebaseFirestore.DocumentData = docSnapshot.data();
     const products: Product[] = Object.values(data); // convert indexed object to array
