@@ -64,43 +64,50 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
     //TODO: abstract for different store types
     //TODO: get store type from uri
     //TODO: check valid url
-    const response = await fetch("https://www." + uri + "/products.json");
-    if(!response)
-    {
-        res.status(500).send("Could not find information for given domain");
-        return;
-    }
-
-    const data = await response.json();
-    if(!data || !data.products || data.products.length == 0)
-    {
-        res.status(500).send("Could not find any products for given domain")
-        return;
-    }
-    let products: Product[] = [];
-    data.products.forEach((productData: ShopifyProductData) => {
-        const product: Product = {
-            name: parse(productData.title).text.replace(/\n/g, " ") || "unknown",
-            price: productData.variants
-                && productData.variants.length > 0
-                && productData.variants[0].price
-                && parseFloat(productData.variants[0].price) || 0,
-            link: productData.handle && uri + "/products/" + productData.handle || "unknown",
-            brand: productData.vendor || "unknown",
-            description: productData.body_html && parse(productData.body_html).text.replace(/\n/g, " ") || "unknown",
-            domain: uri,
-            images: productData.images
-                && productData.images.length > 0
-                && productData.images.map((img: ShopifyProductImage) => img && img.src) || []
+    try{
+        const response = await fetch("https://www." + uri + "/products.json");
+        if(!response)
+        {
+            res.status(500).send("Could not find information for given domain");
+            return;
         }
-        products.push(product);
-    })
 
-    const docRef =  db.collection('products').doc(uri);
-    await docRef.set(Object.assign({}, products), {merge: true})
+        const data = await response.json();
+        if(!data || !data.products || data.products.length == 0)
+        {
+            res.status(500).send("Could not find any products for given domain")
+            return;
+        }
+        let products: Product[] = [];
+        data.products.forEach((productData: ShopifyProductData) => {
+            const product: Product = {
+                name: parse(productData.title).text.replace(/\n/g, " ") || "unknown",
+                price: productData.variants
+                    && productData.variants.length > 0
+                    && productData.variants[0].price
+                    && parseFloat(productData.variants[0].price) || 0,
+                link: productData.handle && uri + "/products/" + productData.handle || "unknown",
+                brand: productData.vendor || "unknown",
+                description: productData.body_html && parse(productData.body_html).text.replace(/\n/g, " ") || "unknown",
+                domain: uri,
+                images: productData.images
+                    && productData.images.length > 0
+                    && productData.images.map((img: ShopifyProductImage) => img && img.src) || []
+            }
+            products.push(product);
+        })
 
-    res.status(200).send("OK");
+        const docRef =  db.collection('products').doc(uri);
+        await docRef.set(Object.assign({}, products), {merge: true})
 
+        res.status(200).send("OK");
+
+    } catch (e)
+    {
+        console.log(e);
+        res.status(500).send("Could not fetch info for domain");
+        return;
+    }
 })
 
 app.get("/products/:domainUri", async (req, res) => {
