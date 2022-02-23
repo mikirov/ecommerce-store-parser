@@ -12,6 +12,7 @@ import cors from 'cors';
 
 import * as serviceAccount from '../firebase-service-account.json';
 import { ShopifyProductData , ShopifyProductImage} from './shopifyproductdata';
+import * as http from "http";
 const firebaseServiceAccount = {               //clone json object into new object to make typescript happy
     type: serviceAccount.type,
     projectId: serviceAccount.project_id,
@@ -31,7 +32,6 @@ initializeApp({
 
 const db = getFirestore();
 
-const PORT = 4000;
 
 const fillProductData = (unparsedProductList: ShopifyProductData[], outProducts: Product[], uri: string) => {
     unparsedProductList.forEach((productData: ShopifyProductData) => {
@@ -54,7 +54,7 @@ const fillProductData = (unparsedProductList: ShopifyProductData[], outProducts:
     })
 }
 
-export const createApp = () => {
+export const createServer = (port: number): http.Server => {
     let app: Express.Application = Express();
     app.use(Express.urlencoded({ extended: false }));
 //TODO: set up cors options
@@ -176,10 +176,11 @@ export const createApp = () => {
             res.status(500).send("Could not get info for this domain")
         }
     });
-    return app;
+    return app.listen(process.env.PORT || port, () => {
+        console.log(`App running on port: ${process.env.PORT || port}`)
+    });
 }
 
-const app = createApp();
-app.listen(process.env.PORT || PORT, () => {
-    console.log(`App running on port: ${PORT}`)
-})
+const PORT: number = 4000;
+const server = createServer(PORT);
+
