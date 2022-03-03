@@ -1,13 +1,10 @@
-interface Product
+export interface Product
 {
     name: string;
     link: string;
-    price: number;
+    price: string;
     brand: string;
     domain: string;
     description: string;
     images: string[];
-
 }
-
-export {Product}

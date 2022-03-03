@@ -7,7 +7,7 @@
     "public": "public",
     "rewrites": [ {
       "source": "**",
-      "function": "app"
+      "function": "appv2"
     } ],
     "ignore": [
       "firebase.json",

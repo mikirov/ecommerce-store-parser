@@ -1,4 +1,4 @@
-import {createServer} from "../src";
+import {createServer} from "../functions/src";
 import request from 'supertest';
 import * as http from "http";
 import {Done} from "mocha";

@@ -5,7 +5,7 @@
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
+    "deploy": "firebase deploy --debug --only functions",
     "logs": "firebase functions:log"
   },
   "engines": {
@@ -19,7 +19,9 @@
     "firebase-admin": "10.0.2",
     "firebase-functions": "3.18.1",
     "node-fetch": "2.6.1",
-    "node-html-parser": "5.2.0"
+    "node-html-parser": "5.2.0",
+    "html-metadata-parser": "^2.0.4",
+    "url-metadata": "^2.5.0"
   },
   "devDependencies": {
     "typescript": "^3.8.0",

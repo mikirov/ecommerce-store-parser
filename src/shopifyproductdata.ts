@@ -1,4 +1,4 @@
-interface ShopifyProductData
+export interface ShopifyProductData
 {
   title: string;
   handle: string;
@@ -6,16 +6,14 @@ interface ShopifyProductData
   vendor: string;
   variants: ShopifyProductVariant[];
   images: ShopifyProductImage[];
-};
+}
 
-interface ShopifyProductVariant
+export interface ShopifyProductVariant
 {
   price: string;
-};
+}
 
-interface ShopifyProductImage
+export interface ShopifyProductImage
 {
   src: string;
-};
-
-export {ShopifyProductData, ShopifyProductVariant, ShopifyProductImage};
+}
