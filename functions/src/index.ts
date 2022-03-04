@@ -11,6 +11,9 @@ import admin from 'firebase-admin';
 admin.initializeApp();
 
 
+
+export {addAllProductsToAlgolia, indexProduct, unindexProduct, updateProduct} from './algolia';
+
 const productParsers: IProductParser[] = [];
 productParsers.push(new ShopifyProductParser());
 productParsers.push(new MetadataProductParser());
