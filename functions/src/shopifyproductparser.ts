@@ -11,15 +11,14 @@ export class ShopifyProductParser implements IProductParser {
         const response = await fetch(finalDomain.url, {method: 'GET'});
         const data = await response.json();
         if (!data || !data.products) throw new Error("500");
-
         return this.getProductData(data.products ? data.products : data, baseUrl.host.split("/")[0]);
 
     }
 
     getProductData(unparsedProductList: ShopifyProductData[], uri: string): Set<Product> {
         const products: Set<Product> = new Set<Product>();
-
         unparsedProductList.forEach((productData: ShopifyProductData) => {
+            // console.log((unparsedProductList as any).variants)
             let product: Product = {
                 name: parse(productData.title).text.replace(/\n/g, " ") || "unknown",
                 // price: productData.variants

@@ -7,6 +7,7 @@ import {MetadataProductParser} from "./metadataproductparser";
 
 import * as functions from "firebase-functions";
 import admin from 'firebase-admin';
+import {DomainParser} from "../../src/domainparser";
 
 admin.initializeApp();
 
@@ -35,54 +36,10 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
 
     try{
         const parsedUrl = new URL(req.body.domainUri.trim().toLowerCase());
-        const hostName = parsedUrl.host.split("/")[0];
 
-        const snapshot = await admin.firestore().collection('parsedDomains').get();
-        const domains = snapshot.docs.map(doc => doc.data().domain);
-        //remove if we want to parse a domain multiple times
-        if(domains.includes(hostName))
-        {
-            res.status(400).send("Domain already parsed")
-        }
-
-        const baseUrl = new URL(parsedUrl.protocol + "//" + hostName);
-
-        let productSet: Set<Product> = new Set<Product>();
-
-        for(const productParser of productParsers)
-        {
-            try{
-                // let _temp;
-                // [productSet, _temp] = await Promise.all([productParser.parse(baseUrl), new Promise((resolve, reject) => setTimeout(reject, 10 * 60 * 1000))]); // fail after 10 mins
-                productSet = await productParser.parse(baseUrl);
-                console.log(productSet);
-                if(productSet.size !== 0) break;
-
-            }
-            catch (e){
-                console.log(e);
-                continue;
-            }
-        }
-
-        if(productSet.size === 0)
-        {
-            await admin.firestore().collection('unparsableDomains').doc(hostName).set({domain: hostName});
-            res.status(400).send("Could not fetch info for domain");
-            return;
-        }
-
-        //Array.from(productSet).forEach(p => console.log(p));
-        //console.log(productSet.size)
-
-
-        const promises = Array.from(productSet).map((product: Product) => {
-            const docRef = admin.firestore().collection('products').doc();
-            return docRef.set(product, {merge: true})
-        })
-        await Promise.all(promises);
-
-        await admin.firestore().collection('parsedDomains').doc(hostName).set({domain: hostName});
+        const domainParser: DomainParser = new DomainParser(parsedUrl);
+        await domainParser.parse();
+        await domainParser.store(admin.firestore());
 
         res.status(200).send("OK");
 
@@ -93,6 +50,7 @@ app.put("/domain", async (req: Express.Request, res: Express.Response) => {
         return;
     }
 })
+
 
 app.get("/parsedDomains", async (req: Express.Request, res: Express.Response) => {
     const snapshot = await admin.firestore().collection('parsedDomains').get();
