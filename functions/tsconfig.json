@@ -4,17 +4,15 @@
     "esModuleInterop": true,
     "moduleResolution": "node",
     "outDir": "lib",
+    "rootDir": ".",
     "sourceMap": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "target": "es6",
+    "target": "es2017",
     "baseUrl": ".",
     "paths": {
       "*": ["node_modules/*"]
     }
   },
-  "compileOnSave": true,
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["./src/**/*"]
 }

@@ -1,23 +1,13 @@
 import Express from 'express';
-import {Product} from "./product";
 import cors from 'cors';
-import {IProductParser} from "./productparser";
-import {ShopifyProductParser} from "./shopifyproductparser";
-import {MetadataProductParser} from "./metadataproductparser";
-
 import * as functions from "firebase-functions";
 import admin from 'firebase-admin';
-import {DomainParser} from "../../src/domainparser";
+import {DomainParser} from "./domainparser";
 
 admin.initializeApp();
 
-
-
-export {addAllProductsToAlgolia, indexProduct, unindexProduct, updateProduct} from './algolia';
-
-const productParsers: IProductParser[] = [];
-productParsers.push(new ShopifyProductParser());
-productParsers.push(new MetadataProductParser());
+export {addAllProductsToAlgolia, indexProduct, unindexProduct, updateProduct,
+    indexBrand, updateBrand, unindexBrand, addAllBrandsToAlgolia} from './algolia';
 
 let app: Express.Application = Express();
 app.use(Express.urlencoded({ extended: false }));
@@ -67,7 +57,7 @@ app.get("/parsedDomains", async (req: Express.Request, res: Express.Response) =>
         return;
     }
 
-    res.status(200).send(domains);
+    res.status(200).send(Array.from(new Set(domains)));
 });
 
 app.get("/unparsableDomains", async (req: Express.Request, res: Express.Response) => {
@@ -91,13 +81,28 @@ app.get("/unparsableDomains", async (req: Express.Request, res: Express.Response
         return;
     }
 
-    res.status(200).send(domains);
+    res.status(200).send(Array.from(new Set(domains)));
 })
 
+app.get("/brands", async (req: Express.Request, res: Express.Response) => {
+    const snapshot = await admin.firestore().collection('brands').get();
+    if(!snapshot || !snapshot.docs)
+    {
+        res.status(500).send("There aren't any brands or collection hasn't been created yet.")
+        return;
+    }
+    const brands = snapshot.docs.map(doc => doc.data().brand);
 
-// app.listen(4000, () => {
-//     console.log("app running")
-// });
+    if(!brands || brands.length == 0)
+    {
+        res.status(404).send("Could not find any brands");
+        return;
+    }
+
+    res.status(200).send(Array.from(new Set(brands)));
+
+})
+
 exports.appv2 = functions
     .runWith({
         memory: '8GB',

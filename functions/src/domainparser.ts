@@ -38,7 +38,11 @@ export class DomainParser
         const domainData = {domain: this.baseUrl.toString()}
         if(this.productSet.size === 0)
         {
-            await connection.collection('unparsableDomains').doc().set(domainData);
+            const snapshots = connection.collection('unparsableDomains').where('domain', '==', this.baseUrl.toString()).get();
+            if(snapshots.length == 0 || !snapshots.exists)
+            {
+                await connection.collection('unparsableDomains').doc().set(domainData);
+            }
             throw new Error("400");
         }
 
@@ -54,9 +58,23 @@ export class DomainParser
         })
         await Promise.all(promises);
 
-        await connection.collection('parsedDomains').doc().set(domainData);
+        const snapshots = connection.collection('parsedDomains').where('domain', '==', this.baseUrl.toString()).get();
+        if(snapshots.length == 0 || !snapshots.exists)
+        {
+            await connection.collection('parsedDomains').doc().set(domainData);
+        }
 
-        const brandPromises = Array.from(brandSet).map(brandToSet => connection.collection('brands').doc().set({brand: brandToSet}, {merge: true}));
+        const brandDocs = await connection.collection('brands').where('brand', 'in', Array.from(brandSet)).get();
+        brandDocs.forEach((brandDoc: FirebaseFirestore.QueryDocumentSnapshot) => {
+            const databaseBrandEntry = brandDoc.data().brand;
+            //filter out only brands not added to database yet.
+            if(brandSet.has(databaseBrandEntry))
+            {
+                brandSet.delete(databaseBrandEntry)
+            }
+        })
+
+        const brandPromises = Array.from(brandSet).map(brandToSet => connection.collection('brands').doc().set({brand: brandToSet, domain: this.baseUrl.toString()}, {merge: true}));
         await Promise.all(brandPromises);
     }
 }

@@ -76,7 +76,7 @@ app.get("/parsedDomains", async (req: Express.Request, res: Express.Response) =>
         return;
     }
 
-    res.status(200).send(domains);
+    res.status(200).send(Array.from(new Set(domains)));
 });
 
 app.get("/unparsableDomains", async (req: Express.Request, res: Express.Response) => {
