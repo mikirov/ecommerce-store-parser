@@ -100,7 +100,7 @@ export class MetadataProductParser implements IProductParser {
             const product: Product = {
                 brand: metadata.og.site_name || "unknown",
                 description: description ||"unknown",
-                domain: this.hostName,
+                domain: this.baseUrl.toString(),
                 images: [],
                 link: metadata.og.url,
                 name: metadata.og.title || "unknown",

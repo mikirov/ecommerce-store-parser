@@ -33,6 +33,18 @@ export class DomainParser
         }
     }
 
+    async deleteCurrentProductsForDomain(connection: any)
+    {
+        const productsToDeleteSnapshot = await connection.collection('products').where('domain', '==', this.baseUrl).get()
+        if(productsToDeleteSnapshot.size !== 0)
+        {
+            const batch = connection.batch();
+            productsToDeleteSnapshot.docs.forEach((doc: any) => batch.delete(doc.ref));
+            await batch.commit();
+            await this.deleteCurrentProductsForDomain(connection);
+        }
+    }
+
     async store(connection: any)
     {
         const domainData = {domain: this.baseUrl.toString()}
@@ -48,6 +60,8 @@ export class DomainParser
 
         // Array.from(productSet).forEach(p => console.log(p));
         // console.log(productSet.size)
+
+        await this.deleteCurrentProductsForDomain(connection)
 
         const brandSet: Set<string> = new Set<string>();
 

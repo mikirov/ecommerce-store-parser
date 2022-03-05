@@ -11,7 +11,7 @@ export class ShopifyProductParser implements IProductParser {
         const response = await fetch(finalDomain.url, {method: 'GET'});
         const data = await response.json();
         if (!data || !data.products) throw new Error("500");
-        return this.getProductData(data.products ? data.products : data, baseUrl.host.split("/")[0]);
+        return this.getProductData(data.products ? data.products : data, baseUrl.toString());
 
     }
 
