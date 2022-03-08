@@ -33,27 +33,27 @@ const db = getFirestore();
     // }
     // const domains = snapshot.docs.map(doc => doc.data().domain);
     const domains = [
-        "https://consciouscoconut.com/",
-        "https://erbaviva.com/",
         "https://cloveandhallow.com/",
+        "https://byroe.com/",
+        "https://follain.com/",
+        "https://consciouscoconut.com/",
+        "https://freeagentskincare.com/",
+        "https://www.drinkpurerose.com/",
+        "https://odacite.com/",
+        "https://janeiredale.com/",
+        "https://indielee.com/",
+        "https://ladysuitebeauty.com/",
         "https://kahina-givingbeauty.com/",
         "https://www.alimapure.com/",
-        "https://www.drinkpurerose.com/",
-        "https://beutiskincare.com/",
-        "https://byroe.com/",
-        "https://indielee.com/",
-        "https://janeiredale.com/",
-        "https://odacite.com/",
-        "https://ladysuitebeauty.com/",
-        "https://www.laroche-posay.us/",
-        "https://www.lorealparisusa.com/"
-    ];
+        "https://erbaviva.com/",
+        "https://beutiskincare.com/"
+    ]
 
     for(const domain of domains)
     {
         try {
             const domainUrl = new URL(domain);
-            const domainParser: DomainParser = new DomainParser(domainUrl);
+            const domainParser: DomainParser = new DomainParser(domainUrl, true);
             await domainParser.parse();
             await domainParser.store(db);
         } catch (e) {

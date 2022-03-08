@@ -14,29 +14,33 @@
   "main": "lib/src/index.js",
   "dependencies": {
     "@types/node-fetch": "2.6.1",
+    "algoliasearch": "^4.12.2",
     "cors": "2.8.5",
     "express": "4.17.3",
     "firebase-admin": "10.0.2",
     "firebase-functions": "3.18.1",
+    "html-metadata-parser": "^2.0.4",
     "node-fetch": "2.6.1",
     "node-html-parser": "5.2.0",
-    "html-metadata-parser": "^2.0.4",
-    "url-metadata": "^2.5.0",
-    "algoliasearch": "^4.12.2"
+    "passport": "^0.5.2",
+    "passport-http": "^0.3.0",
+    "url-metadata": "^2.5.0"
   },
   "devDependencies": {
+    "@types/passport": "^1.0.7",
+    "@types/passport-http": "^0.3.9",
     "@types/algoliasearch": "^4.0.0",
-    "typescript": "^3.8.0",
-    "firebase-functions-test": "^0.2.0",
     "@types/chai": "^4.3.0",
     "@types/cors": "^2.8.12",
     "@types/express": "4.17.3",
     "@types/mocha": "^9.1.0",
+    "@types/supertest": "~2.0.11",
     "chai": "^4.3.6",
+    "firebase-functions-test": "^0.2.0",
     "mocha": "^9.2.1",
     "supertest": "^6.2.2",
-    "@types/supertest": "~2.0.11",
-    "ts-node": "^10.5.0"
+    "ts-node": "^10.5.0",
+    "typescript": "^3.8.0"
   },
   "private": true
 }

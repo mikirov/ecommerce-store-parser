@@ -22,6 +22,12 @@ export class MetadataProductParser implements IProductParser {
 
     MAX_TIME = 5 * 60 * 1000;
 
+    isRecursive: boolean = false;
+
+    constructor(recursive = false) {
+        this.isRecursive = recursive;
+    }
+
     async parse(baseUrl: URL): Promise<Set<Product>> {
         this.baseUrl = baseUrl;
         this.hostName = baseUrl.host.split("/")[0];
@@ -63,13 +69,20 @@ export class MetadataProductParser implements IProductParser {
             this.fillProductDataFromMetadata(rootDOMObject, metadata);
 
             const allUrls: string[] = this.getUrls(this.baseUrl, rootDOMObject);
-            // const promises: Promise<void>[] = Array.from(new Set(allUrls)).map(url => this.findProducts(url, depth + 1, startTimeMillis));
-            // await Promise.allSettled(promises);
-            const urls = Array.from(new Set(allUrls));
-            for(const url of urls)
+            if(this.isRecursive)
             {
-                await this.findProducts(url, depth + 1, startTimeMillis)
+                const promises: Promise<void>[] = Array.from(new Set(allUrls)).map(url => this.findProducts(url, depth + 1, startTimeMillis));
+                await Promise.allSettled(promises);
             }
+            else
+            {
+                const urls = Array.from(new Set(allUrls));
+                for(const url of urls)
+                {
+                    await this.findProducts(url, depth + 1, startTimeMillis)
+                }
+            }
+
 
             return new Promise((resolve, reject) => resolve());
         }
