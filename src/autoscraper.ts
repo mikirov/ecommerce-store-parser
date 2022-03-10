@@ -25,30 +25,14 @@ const db = getFirestore();
 
 //TODO: perhaps clear the products collection beforehand?
 (async () => {
-    // const snapshot = await db.collection('parsedDomains').get();
-    //
-    // if(!snapshot || !snapshot.docs)
-    // {
-    //     return;
-    // }
-    // const domains = snapshot.docs.map(doc => doc.data().domain);
-    const domains = [
-        "https://cloveandhallow.com/",
-        "https://byroe.com/",
-        "https://follain.com/",
-        "https://consciouscoconut.com/",
-        "https://freeagentskincare.com/",
-        "https://www.drinkpurerose.com/",
-        "https://odacite.com/",
-        "https://janeiredale.com/",
-        "https://indielee.com/",
-        "https://ladysuitebeauty.com/",
-        "https://kahina-givingbeauty.com/",
-        "https://www.alimapure.com/",
-        "https://erbaviva.com/",
-        "https://beutiskincare.com/"
-    ]
 
+    const snapshot = await db.collection('parsedDomains').get();
+    if(!snapshot || !snapshot.docs)
+    {
+        return;
+    }
+    const domains: string[] = snapshot.docs.map(doc => doc.data().domain);
+    console.log(domains)
     for(const domain of domains)
     {
         try {
@@ -59,7 +43,6 @@ const db = getFirestore();
         } catch (e) {
             console.log(e);
         }
-
     }
 })();
 

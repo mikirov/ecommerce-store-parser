@@ -28,6 +28,50 @@ export class MetadataProductParser implements IProductParser {
         this.isRecursive = recursive;
     }
 
+    includeList: string[] =
+        [
+            "butter",
+            "oil",
+            "mask",
+            "face",
+            "hair",
+            "beauty",
+            "candle",
+            "serum",
+            "lavender",
+            "ginger",
+            "aloe",
+            "clarify",
+            "cleanser",
+            "wash",
+            "bath",
+            "diffuse",
+            "water",
+            "rose",
+            "vitamin",
+            "mg",
+            "eye",
+            "mouth",
+            "lip",
+            "lotion",
+            "body",
+            "coconut",
+            "facial",
+            "flower"
+        ]
+
+    excludeList: string[] = [
+        "gift",
+        "card",
+        "custom",
+        "monthly",
+        "subscr",
+        "reward",
+        "free",
+        "sample",
+        "kit"
+    ]
+
     async parse(baseUrl: URL): Promise<Set<Product>> {
         this.baseUrl = baseUrl;
         this.hostName = baseUrl.host.split("/")[0];
@@ -116,9 +160,33 @@ export class MetadataProductParser implements IProductParser {
                 domain: this.baseUrl.toString(),
                 images: [],
                 link: metadata.og.url,
-                name: metadata.og.title || "unknown",
+                name: metadata.og.title.trim().toLowerCase()  || "unknown",
                 price: priceString || "unknown"
             }
+
+            let allowed = true;
+
+            this.excludeList.forEach(disallowedValue => {
+                if(product.name.includes(disallowedValue))
+                {
+                    allowed = false;
+                    return;
+                }
+            })
+
+            if(!allowed) return;
+
+            allowed = false;
+
+            this.includeList.forEach(allowedValue => {
+                if(product.name.includes(allowedValue))
+                {
+                    allowed = true;
+                }
+            })
+
+            if(!allowed) return;
+
 
             this.productImageSet.clear();
 

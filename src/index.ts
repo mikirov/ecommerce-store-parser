@@ -8,9 +8,9 @@ import {BasicStrategy} from "passport-http";
 import * as serviceAccount from '../firebase-service-account.json';
 import {DomainParser} from "./domainparser";
 import {firestore} from "firebase-admin";
-import DocumentSnapshot = firestore.DocumentSnapshot;
+
 import firebase from "firebase/compat";
-import DocumentData = firebase.firestore.DocumentData;
+
 const firebaseServiceAccount = {               //clone json object into new object to make typescript happy
     type: serviceAccount.type,
     projectId: serviceAccount.project_id,
