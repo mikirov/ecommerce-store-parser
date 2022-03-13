@@ -2,6 +2,7 @@ import {IProductParser} from "./productparser";
 import {ShopifyProductParser} from "./shopifyproductparser";
 import {MetadataProductParser} from "./metadataproductparser";
 import {Product} from "./product";
+import { SitemapParser } from "./SitemapParser";
 
 export class DomainParser
 {
@@ -12,6 +13,7 @@ export class DomainParser
     baseUrl: URL
 
     constructor(baseUrl: URL, recursive: boolean) {
+        this.productParsers.push(new SitemapParser())
         this.productParsers.push(new ShopifyProductParser());
         this.productParsers.push(new MetadataProductParser(recursive));
 
