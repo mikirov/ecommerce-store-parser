@@ -24,20 +24,23 @@ export class SitemapParser implements IProductParser {
             const productUrls = data.sites.filter(siteUrl => siteUrl.includes("products/"));
             for(const productUrl of productUrls)
             {
-                await this.parseProductUrl(productUrl)
+               await this.parseProductUrl(productUrl)
             }
             //await Promise.all(productUrls.map(url => this.parseProductUrl(url)));
 
             //console.log(productUrls);
-            if(productUrls.length !== Array.from(this.products).length)
+            if(productUrls.length === Array.from(this.products).length)
             {
-                console.log("couldn't get all product info");
+                console.log("got all product info");
+                //return all products or nothing
+                return this.products;
             }
         } catch (e) {
             console.log(e)
         }
 
-        return this.products;
+        console.log("couldn't get all product info");
+        return new Set<Product>();
     }
 
     async parseProductUrl(uriToParse: string)
@@ -50,8 +53,17 @@ export class SitemapParser implements IProductParser {
     }
 
     fillProductDataFromMetadata(uriToParse: string, rootDOMObject: HTMLElement, metadata: Metadata) {
-        if (!metadata || !metadata.og || !metadata.og.title || !metadata.og.site_name) {
-            console.log("metadata not correct");
+        if (!metadata) {
+            console.log("metadata not found");
+            return;
+        }
+
+        const title = metadata.og.title || metadata.meta.title;
+        const siteName = metadata.og.site_name || metadata.meta.site_name;
+
+        if(!title || !siteName)
+        {
+            console.log("no metadata name or brand, aborting");
             return;
         }
 
@@ -62,14 +74,16 @@ export class SitemapParser implements IProductParser {
             let description = metadata.og.description ||
                 metadata.meta.description ||
                 rootDOMObject.querySelector("meta[property='twitter:description']")?.getAttribute("content");
+
             description = description && description.replace(/\n/g, " ").trim();
+
             let product: Product = {
-                brand: metadata.og.site_name.toLowerCase().trim() || null,
+                brand: siteName && siteName.toLowerCase().trim() || null,
                 description: description || null,
                 domain: this.baseUrl.toString(),
                 images: [],
                 link: uriToParse,
-                name: metadata.og.title.toLowerCase().trim()  || null,
+                name: title && title.toLowerCase().trim()  || null,
                 price: priceString || null
             }
 
