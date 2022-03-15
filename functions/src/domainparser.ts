@@ -14,8 +14,8 @@ export class DomainParser
 
     constructor(baseUrl: URL, recursive: boolean) {
         this.productParsers.push(new SitemapParser())
-        this.productParsers.push(new ShopifyProductParser());
-        this.productParsers.push(new MetadataProductParser(recursive));
+        //this.productParsers.push(new ShopifyProductParser());
+        //this.productParsers.push(new MetadataProductParser(recursive));
 
         this.baseUrl = baseUrl
     }

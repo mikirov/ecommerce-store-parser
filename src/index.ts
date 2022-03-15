@@ -5,7 +5,7 @@ import { getFirestore} from 'firebase-admin/firestore';
 
 import passport from "passport"
 import {BasicStrategy} from "passport-http";
-import * as serviceAccount from '../firebase-service-account.json';
+import * as serviceAccount from './social-ocean-products-firebase-adminsdk-qy0qr-9ae8ae09ef.json';
 import {DomainParser} from "./domainparser";
 import {firestore} from "firebase-admin";
 

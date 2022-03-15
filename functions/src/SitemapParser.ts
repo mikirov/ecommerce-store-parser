@@ -1,6 +1,5 @@
 import { Product } from "./product";
 import {IProductParser} from "./productparser";
-import {Parser} from 'xml2js';
 import Sitemapper from 'sitemapper';
 
 import fetch from "node-fetch";

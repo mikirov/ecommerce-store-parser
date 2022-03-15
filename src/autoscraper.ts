@@ -1,7 +1,7 @@
 import {initializeApp, cert} from 'firebase-admin/app';
 import {getFirestore} from 'firebase-admin/firestore';
 
-import * as serviceAccount from '../firebase-service-account.json';
+import * as serviceAccount from './social-ocean-products-firebase-adminsdk-qy0qr-9ae8ae09ef.json';
 import {DomainParser} from "./domainparser";
 
 const firebaseServiceAccount = {               //clone json object into new object to make typescript happy
@@ -200,15 +200,22 @@ const db = getFirestore();
 
         "https://theveritasfarms.com/",
     ]
+
+    console.log(`Parsing ${domains.length} domains ... `)
+    let parsedDomains = 0;
     for (const domain of domains) {
         try {
             const domainUrl = new URL(domain);
             const domainParser: DomainParser = new DomainParser(domainUrl, true);
             await domainParser.parse();
             await domainParser.store(db);
+            parsedDomains++;
         } catch (e) {
             console.log(e);
         }
     }
+
+    console.log(`Successfully parsed ${parsedDomains} domains`)
+
 })();
 

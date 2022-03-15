@@ -24,7 +24,8 @@
     "node-html-parser": "5.2.0",
     "passport": "^0.5.2",
     "passport-http": "^0.3.0",
-    "url-metadata": "^2.5.0"
+    "url-metadata": "^2.5.0",
+    "sitemapper": "^3.2.2"
   },
   "devDependencies": {
     "@types/passport": "^1.0.7",
