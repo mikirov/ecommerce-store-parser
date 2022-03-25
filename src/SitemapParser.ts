@@ -13,6 +13,8 @@ export class SitemapParser implements IProductParser {
 
     baseUrl: URL;
 
+    successRateThreshold = 0.95;
+
     async parse(baseUrl: URL): Promise<Set<Product>> {
 
         try
@@ -28,8 +30,10 @@ export class SitemapParser implements IProductParser {
             //}
             await Promise.all(productUrls.map(url => this.parseProductUrl(url)));
 
-            //console.log(productUrls);
-            if(productUrls.length === Array.from(this.products).length)
+            console.log(productUrls);
+            console.log("produt url count" + productUrls.length)
+            console.log("parsed product count" + Array.from(this.products).length)
+            if(productUrls.length / Array.from(this.products).length > this.successRateThreshold)
             {
                 console.log("got all product info");
                 //return all products or nothing

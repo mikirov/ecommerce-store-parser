@@ -10,7 +10,7 @@
     "test": "mocha -r ts-node/register --timeout 10000 --exit 'test/*.ts'",
     "build": "tsc",
     "prestart": "npm run build",
-    "start": "node dist/src/index.js"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@types/node-fetch": "2.6.1",

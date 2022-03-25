@@ -28,50 +28,6 @@ export class MetadataProductParser implements IProductParser {
         this.isRecursive = recursive;
     }
 
-    includeList: string[] =
-        [
-            "butter",
-            "oil",
-            "mask",
-            "face",
-            "hair",
-            "beauty",
-            "candle",
-            "serum",
-            "lavender",
-            "ginger",
-            "aloe",
-            "clarify",
-            "cleanser",
-            "wash",
-            "bath",
-            "diffuse",
-            "water",
-            "rose",
-            "vitamin",
-            "mg",
-            "eye",
-            "mouth",
-            "lip",
-            "lotion",
-            "body",
-            "coconut",
-            "facial",
-            "flower"
-        ]
-
-    excludeList: string[] = [
-        "gift",
-        "card",
-        "custom",
-        "monthly",
-        "subscr",
-        "reward",
-        "free",
-        "sample",
-        "kit"
-    ]
-
     async parse(baseUrl: URL): Promise<Set<Product>> {
         this.baseUrl = baseUrl;
         this.hostName = baseUrl.host.split("/")[0];
@@ -110,7 +66,7 @@ export class MetadataProductParser implements IProductParser {
             const unparsedRootHtml = await unparsedRootDomainData.text();
             const rootDOMObject = parse(unparsedRootHtml);
             const metadata: Metadata = await parser(uriToParse);
-            this.fillProductDataFromMetadata(rootDOMObject, metadata);
+            this.fillProductDataFromMetadata(uriToParse, rootDOMObject, metadata);
 
             const allUrls: string[] = this.getUrls(this.baseUrl, rootDOMObject);
             if(this.isRecursive)
@@ -141,8 +97,18 @@ export class MetadataProductParser implements IProductParser {
 
     }
 
-    fillProductDataFromMetadata(rootDOMObject: HTMLElement, metadata: Metadata) {
-        if (!metadata || !metadata.og || !metadata.og.type || metadata.og.type !== "product" || !metadata.og.url) {
+    fillProductDataFromMetadata(uriToParse: string, rootDOMObject: HTMLElement, metadata: Metadata) {
+        if (!metadata) {
+            console.log("metadata not found");
+            return;
+        }
+
+        const title = metadata.og.title || metadata.meta.title;
+        const siteName = metadata.og.site_name || metadata.meta.site_name;
+
+        if(!title || !siteName)
+        {
+            console.log("no metadata name or brand, aborting");
             return;
         }
 
@@ -153,92 +119,87 @@ export class MetadataProductParser implements IProductParser {
             let description = metadata.og.description ||
                 metadata.meta.description ||
                 rootDOMObject.querySelector("meta[property='twitter:description']")?.getAttribute("content");
-            description = description.replace(/\n/g, " ").trim();
-            const product: Product = {
-                brand: metadata.og.site_name || "unknown",
-                description: description ||"unknown",
+
+            description = description && description.replace(/\n/g, " ").trim();
+
+            let product: Product = {
+                brand: siteName && siteName.toLowerCase().trim() || null,
+                description: description || null,
                 domain: this.baseUrl.toString(),
                 images: [],
-                link: metadata.og.url,
-                name: metadata.og.title.trim().toLowerCase()  || "unknown",
-                price: priceString || "unknown"
+                link: uriToParse,
+                name: title && title.toLowerCase().trim()  || null,
+                price: priceString || null
             }
 
-            let allowed = true;
+            product.images = this.getImagesFromMetadata(metadata, rootDOMObject);
 
-            this.excludeList.forEach(disallowedValue => {
-                if(product.name.includes(disallowedValue))
-                {
-                    allowed = false;
-                    return;
-                }
-            })
-
-            if(!allowed) return;
-
-            allowed = false;
-
-            this.includeList.forEach(allowedValue => {
-                if(product.name.includes(allowedValue))
-                {
-                    allowed = true;
-                }
-            })
-
-            if(!allowed) return;
-
-
-            this.productImageSet.clear();
-
-            for(const image of metadata.images)
+            if(product.images.length > 0)
             {
-                const imageSrc = (image as any).src;
-                if(!imageSrc || !imageSrc.includes("products"))
-                {
-                    continue;
-                }
-                try{
-                    const imageUrl = new URL(imageSrc); //throws on invalid url
-                    if(!this.productImageSet.has(imageSrc))
-                    {
-                        this.productImageSet.add(imageSrc);
-                        product.images.push(imageSrc);
-                    }
-                }
-                catch (e)
-                {
-                    console.log("found non url image in metadata")
-                }
-            }
-            if(product.images.length == 0 && metadata.og.image)
-            {
-                try {
-                    const imgSrc = metadata.og.image;
-                    const ogImageUrl = new URL(imgSrc);
-                    if(!this.productImageSet.has(imgSrc))
-                    {
-                        this.productImageSet.add(imgSrc);
-                        product.images.push(imgSrc);
-                    }
-
-                } catch (e) {
-
-                    console.log("found non url image in metadata")
-                }
-            }
-
-            //product.images = product.images.slice(0, product.images.length/2); // remove duplicates, seems like the second half of fetched images are the same with different size
-
-            if (!this.productTrackerSet.has(JSON.stringify(product))) {
-                this.productTrackerSet.add(JSON.stringify(product));
                 this.products.add(product);
                 console.log("successfully parsed product");
             }
+
         } catch (e) {
             console.log(e);
         }
 
     }
+
+    getImagesFromMetadata(metadata: Metadata, rootDOMObject: HTMLElement)
+    {
+        let imageSet = new Set<string>();
+        for(const image of metadata.images)
+        {
+            const imageSrc = (image as any).src;
+            if(!this.isImageUrlAllowed(imageSrc))
+            {
+                continue;
+            }
+            try{
+                const imageUrl = new URL(imageSrc); //throws on invalid url
+                imageSet.add(imageSrc);
+            }
+            catch (e)
+            {
+                console.log(e)
+            }
+        }
+        if(this.isImageUrlAllowed(metadata.og.image))
+        {
+            try {
+                const imgSrc = metadata.og.image;
+                const ogImageUrl = new URL(imgSrc);
+                imageSet.add(imgSrc);
+
+            } catch (e) {
+
+                console.log(e)
+            }
+        }
+
+        try{
+            const twitterImageUrl = rootDOMObject.querySelector("meta[property='twitter:image']")?.getAttribute("content");
+            if(this.isImageUrlAllowed(twitterImageUrl))
+            {
+                const imageUrl = new URL(twitterImageUrl); //throws on invalid url
+                imageSet.add(twitterImageUrl);
+            }
+
+        }
+        catch (e)
+        {
+            console.log(e)
+        }
+
+        return Array.from(imageSet);
+    }
+
+    isImageUrlAllowed(url: string) : boolean
+    {
+        return url && url.includes("product");
+    }
+
 
     getUrls(baseUrl: URL, rootDOMObject: HTMLElement): string[] {
         return rootDOMObject.querySelectorAll("a").map((a: HTMLElement): string => {
