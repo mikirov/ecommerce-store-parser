@@ -7,7 +7,7 @@ export interface SOProduct
     details: string;
     domain: string;
     externalId: string;
-    favouriteCount: number;
+    favoriteCount: number;
     hero: string;
     isActive: boolean;
     isCatchofTheDat: boolean;

@@ -1,88 +1,146 @@
 import * as functions from 'firebase-functions';
-import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore";
+import {DocumentSnapshot, QueryDocumentSnapshot} from "firebase-functions/lib/providers/firestore";
 import {Change, EventContext} from "firebase-functions";
 
 import admin from 'firebase-admin';
 import {SOProduct} from "./soproduct";
 const  db = admin.firestore();
 
+const getProductInfo = async (docData): Promise<[SOProduct, FirebaseFirestore.DocumentReference]> => {
+    if(docData == null)
+    {
+        throw new Error("no document data");
+    }
+
+    const productsSnapshot: FirebaseFirestore.DocumentData = await db.collection('products').where('externalId', '==', docData.externalProductId).get();
+    if(productsSnapshot == null || productsSnapshot.docs == null || productsSnapshot.docs.length == 0)
+    {
+        throw new Error("couldn't find product");
+    }
+    const product: SOProduct = productsSnapshot.docs[0].exists ? productsSnapshot.docs[0].data() as SOProduct : null;
+    const productRef: FirebaseFirestore.DocumentReference = productsSnapshot.docs[0].exists ? productsSnapshot.docs[0].ref : null;
+    if(product == null || productRef == null)
+    {
+        throw new Error("product or product ref are null");
+    }
+    functions.logger.info(product);
+    functions.logger.info(productRef);
+
+    return [product, productRef];
+}
+
+const getUserData = async (docData) => {
+
+    const userSnapshot = await db.collection('users').where('phone', '==', docData.userId).get();
+    if(userSnapshot  == null || userSnapshot.docs == null || userSnapshot.docs.length == 0)
+    {
+        throw new Error("could not find user data for saved item user id");
+    }
+
+    const userData = userSnapshot.docs[0].exists ? userSnapshot.docs[0].data() : null;
+    if(userData == null)
+    {
+        throw new Error("userData could not be set");
+    }
+
+    functions.logger.info(userData);
+    return userData
+}
+
+const saveItemData = async (docData, docRef, product, userData) => {
+
+    docData = {
+        ...docData,
+
+        author: userData.name,
+        authorImage: userData.localPath,
+        authorRemoteImage: userData.remotePath,
+        score: userData.score,
+
+        title: product.title,
+        brand: product.brand,
+        domain: product.domain,
+        favoriteCount: product.favoriteCount,
+        saveCount: product.saveCount,
+        productLocalPath: product.localPath,
+        productRemotePath: product.remotePath
+    }
+
+    await docRef.set(docData, {merge: true});
+}
+
 export const onItemFavorited = functions.firestore
     .document('favoriteItems/{favoriteItemId}')
-    .onWrite(async (change: Change<DocumentSnapshot>, context: EventContext) => {
+    .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try {
-            const docRef = change.after.ref;
-            let docData = change.after.data();
-            if(!docRef || !docData)
-            {
-                functions.logger.error("no document ref or data")
-                return;
-            }
+            const docRef = change.ref;
+            let docData = change.data();
+            const [product, productRef] = await getProductInfo(docData);
 
-            const productsSnapshot = await db.collection('products').where('externalId', '==', docData.externalProductId).limit(1).get();
-            let product: SOProduct = productsSnapshot.docs[0].exists ? productsSnapshot.docs[0].data() as SOProduct : null;
-            const productRef = productsSnapshot.docs[0].exists ? productsSnapshot.docs[0].ref : null;
-            if(!product || !productRef)
-            {
-                functions.logger.error("couldn't find product");
-                return;
-            }
-
-            product.saveCount = product.saveCount + 1;
-
+            product.favoriteCount = product.favoriteCount + 1;
             await productRef.set(product, {merge: true});
 
+            const userData = await getUserData(docData);
 
-            const userSnapshot = await db.collection('users').where('phone', '==', docData.userId).limit(1).get();
-            if(!userSnapshot.docs || userSnapshot.docs.length == 0)
-            {
-                functions.logger.error("could not find user data for saved item user id");
-                return;
-            }
-
-            const userData = userSnapshot.docs[0].exists ? userSnapshot.docs[0].data() : null;
-            if(!userData)
-            {
-                functions.logger.error("could not find user data for saved item user id");
-                return;
-            }
-
-            const userImageSnapshot = await db.collection('userImages').where('userId', '==', docData.userId).limit(1).get();
-            if(!userImageSnapshot.docs || userImageSnapshot.docs.length == 0)
-            {
-                functions.logger.error("could not find user image for saved item user id");
-                return;
-            }
-
-            const userImageData = userImageSnapshot.docs[0].exists ? userImageSnapshot.docs[0].data() : null;
-            if(!userImageData)
-            {
-                functions.logger.error("could not find user image for saved item user id");
-                return;
-            }
-
-
-            docData = {
-                ...docData,
-
-                author: userData.name,
-                authorImage: userImageData.localPath,
-                authorRemoteImage: userImageData.remotePath,
-                score: userData.score,
-
-                title: product.title,
-                brand: product.brand,
-                domain: product.domain,
-                favoriteCount: product.favouriteCount,
-                saveCount: product.saveCount,
-                productLocalPath: product.localPath,
-                productRemotePath: product.remotePath
-            }
-
-            await docRef.set(docData, {merge: true});
+            await saveItemData(docData, docRef, product, userData);
         }
         catch (e) {
             functions.logger.error(e.message);
         }
     })
 
+export const onItemUnfavorited = functions.firestore
+    .document('favoriteItems/{favoriteItemId}')
+    .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try{
+            let docData = change.data();
+            const [product, productRef] = await getProductInfo(docData);
 
+            product.favoriteCount = product.favoriteCount - 1;
+
+            await productRef.set(product, {merge: true});
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
+
+export const onItemSaved = functions.firestore
+    .document('savedItems/{savedItemId}')
+    .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try {
+
+            let docData = change.data();
+            let docRef = change.ref;
+
+            const [product, productRef] = await getProductInfo(docData);
+
+            product.saveCount = product.saveCount + 1;
+
+            await productRef.set(product, {merge: true});
+
+            const userData = await getUserData(docData);
+
+            await saveItemData(docData, docRef, product, userData);
+        }
+        catch (e) {
+            functions.logger.error(e.message);
+        }
+    })
+
+export const onItemUnsaved = functions.firestore
+    .document('savedItems/{savedItemId}')
+    .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try{
+            let docData = change.data();
+
+            const [product, productRef] = await getProductInfo(docData);
+
+            product.saveCount = product.saveCount - 1;
+
+            await productRef.set(product, {merge: true});
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
