@@ -144,3 +144,51 @@ export const onItemUnsaved = functions.firestore
             functions.logger.error(e.message)
         }
     })
+
+export const onPostLiked = functions.firestore
+    .document('postLikes/{likeId}')
+    .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try
+        {
+            const docData = change.data();
+            const docRef = change.ref;
+            const userData = await getUserData(docData);
+
+            const newData = {
+                ...docData,
+
+                author: userData.author,
+                authorImage: userData.authorImage,
+                authorRemoteImage: userData.authorRemoteImage,
+                score: userData.score
+            }
+            await docRef.set(newData, {merge: true});
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
+
+export const onRecommendationLiked = functions.firestore
+    .document('recommendationLikes/{likeId}')
+    .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try
+        {
+            const docData = change.data();
+            const docRef = change.ref;
+            const userData = await getUserData(docData);
+
+            const newData = {
+                ...docData,
+
+                author: userData.author,
+                authorImage: userData.authorImage,
+                authorRemoteImage: userData.authorRemoteImage,
+                score: userData.score
+            }
+            await docRef.set(newData, {merge: true});
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
