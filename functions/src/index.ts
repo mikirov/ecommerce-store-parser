@@ -9,7 +9,8 @@ admin.initializeApp();
 export {addAllProductsToAlgolia, indexProduct, unindexProduct, updateProduct,
     indexBrand, updateBrand, unindexBrand, addAllBrandsToAlgolia} from './algolia';
 
-export {onItemFavorited, onItemUnfavorited, onItemSaved, onItemUnsaved} from './favoriteItem';
+export {onItemFavorited, onItemUnfavorited, onItemSaved, onItemUnsaved,
+    onRecommendationLiked, onRecommendationUnliked, onPostLiked, onPostUnliked} from './favoriteItem';
 
 import passport from 'passport';
 import {BasicStrategy} from "passport-http";

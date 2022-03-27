@@ -29,6 +29,52 @@ const getProductInfo = async (docData): Promise<[SOProduct, FirebaseFirestore.Do
     return [product, productRef];
 }
 
+const getRecommendationInfo = async (docData): Promise<[any, FirebaseFirestore.DocumentReference]> => {
+    if(docData == null)
+    {
+        throw new Error("no document data");
+    }
+
+    const recommendationSnapshot: FirebaseFirestore.DocumentData = await db.collection('recommendations').where('externalId', '==', docData.externalProductId).get();
+    if(recommendationSnapshot == null || recommendationSnapshot.docs == null || recommendationSnapshot.docs.length == 0)
+    {
+        throw new Error("couldn't find product");
+    }
+    const recommendation = recommendationSnapshot.docs[0].exists ? recommendationSnapshot.docs[0].data() as SOProduct : null;
+    const recommendationRef: FirebaseFirestore.DocumentReference = recommendationSnapshot.docs[0].exists ? recommendationSnapshot.docs[0].ref : null;
+    if(recommendation == null || recommendationRef == null)
+    {
+        throw new Error("data or ref are null");
+    }
+    functions.logger.info(recommendation);
+    functions.logger.info(recommendationRef);
+
+    return [recommendation, recommendationRef];
+}
+
+const getPostInfo = async (docData): Promise<[any, FirebaseFirestore.DocumentReference]> => {
+    if(docData == null)
+    {
+        throw new Error("no document data");
+    }
+
+    const postSnapshot: FirebaseFirestore.DocumentData = await db.collection('posts').where('externalId', '==', docData.externalProductId).get();
+    if(postSnapshot == null || postSnapshot.docs == null || postSnapshot.docs.length == 0)
+    {
+        throw new Error("couldn't find product");
+    }
+    const post = postSnapshot.docs[0].exists ? postSnapshot.docs[0].data() as SOProduct : null;
+    const postRef: FirebaseFirestore.DocumentReference = postSnapshot.docs[0].exists ? postSnapshot.docs[0].ref : null;
+    if(post == null || postRef == null)
+    {
+        throw new Error("data or ref are null");
+    }
+    functions.logger.info(post);
+    functions.logger.info(postRef);
+
+    return [post, postRef];
+}
+
 const getUserData = async (docData) => {
 
     const userSnapshot = await db.collection('users').where('phone', '==', docData.userId).get();
@@ -152,8 +198,12 @@ export const onPostLiked = functions.firestore
         {
             const docData = change.data();
             const docRef = change.ref;
-            const userData = await getUserData(docData);
 
+            let [post, postRef] = await getPostInfo(docData);
+            post.likeCount = post.likeCount + 1;
+            await postRef.set(post, {merge: true});
+
+            const userData = await getUserData(docData);
             const newData = {
                 ...docData,
 
@@ -169,6 +219,23 @@ export const onPostLiked = functions.firestore
         }
     })
 
+export const onPostUnliked = functions.firestore
+    .document('postLikes/{likeId}')
+    .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try
+        {
+            const docData = change.data();
+
+            let [post, postRef] = await getPostInfo(docData);
+            post.likeCount = post.likeCount - 1;
+            await postRef.set(post, {merge: true});
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
+
+
 export const onRecommendationLiked = functions.firestore
     .document('recommendationLikes/{likeId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
@@ -176,8 +243,12 @@ export const onRecommendationLiked = functions.firestore
         {
             const docData = change.data();
             const docRef = change.ref;
-            const userData = await getUserData(docData);
 
+            let [recommendation, recommendationRef] = await getRecommendationInfo(docData);
+            recommendation.likeCount = recommendation.likeCount + 1;
+            await recommendationRef.set(recommendation, {merge: true});
+
+            const userData = await getUserData(docData);
             const newData = {
                 ...docData,
 
@@ -187,6 +258,24 @@ export const onRecommendationLiked = functions.firestore
                 score: userData.score
             }
             await docRef.set(newData, {merge: true});
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
+
+export const onRecommendationUnliked = functions.firestore
+    .document('recommendationLikes/{likeId}')
+    .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try
+        {
+            const docData = change.data();
+
+            let [recommendation, recommendationRef] = await getRecommendationInfo(docData);
+
+            recommendation.likeCount = recommendation.likeCount - 1;
+
+            await recommendationRef.set(recommendation, {merge: true});
         }
         catch (e) {
             functions.logger.error(e.message)
