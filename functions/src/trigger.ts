@@ -192,7 +192,7 @@ export const onItemUnsaved = functions.firestore
     })
 
 export const onPostLiked = functions.firestore
-    .document('postLikes/{likeId}')
+    .document('postedItemLikes/{likeId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try
         {
@@ -200,19 +200,15 @@ export const onPostLiked = functions.firestore
             const docRef = change.ref;
 
             let [post, postRef] = await getPostInfo(docData);
-            post.likeCount = post.likeCount + 1;
+            post.rate = post.rate + 1;
             await postRef.set(post, {merge: true});
 
             const userData = await getUserData(docData);
-            const newData = {
-                ...docData,
 
-                author: userData.author,
-                authorImage: userData.authorImage,
-                authorRemoteImage: userData.authorRemoteImage,
-                score: userData.score
-            }
-            await docRef.set(newData, {merge: true});
+            const [product, productRef] = await getProductInfo(docData);
+
+            await saveItemData(docData, docRef, product, userData);
+
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -220,14 +216,14 @@ export const onPostLiked = functions.firestore
     })
 
 export const onPostUnliked = functions.firestore
-    .document('postLikes/{likeId}')
+    .document('postedItemLikes/{likeId}')
     .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try
         {
             const docData = change.data();
 
             let [post, postRef] = await getPostInfo(docData);
-            post.likeCount = post.likeCount - 1;
+            post.rate = post.rate - 1;
             await postRef.set(post, {merge: true});
         }
         catch (e) {
@@ -237,7 +233,7 @@ export const onPostUnliked = functions.firestore
 
 
 export const onRecommendationLiked = functions.firestore
-    .document('recommendationLikes/{likeId}')
+    .document('recommendedItemLikes/{likeId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try
         {
@@ -245,19 +241,14 @@ export const onRecommendationLiked = functions.firestore
             const docRef = change.ref;
 
             let [recommendation, recommendationRef] = await getRecommendationInfo(docData);
-            recommendation.likeCount = recommendation.likeCount + 1;
+            recommendation.rate = recommendation.rate + 1;
             await recommendationRef.set(recommendation, {merge: true});
 
             const userData = await getUserData(docData);
-            const newData = {
-                ...docData,
 
-                author: userData.author,
-                authorImage: userData.authorImage,
-                authorRemoteImage: userData.authorRemoteImage,
-                score: userData.score
-            }
-            await docRef.set(newData, {merge: true});
+            const [product, productRef] = await getProductInfo(docData);
+
+            await saveItemData(docData, docRef, product, userData);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -265,7 +256,7 @@ export const onRecommendationLiked = functions.firestore
     })
 
 export const onRecommendationUnliked = functions.firestore
-    .document('recommendationLikes/{likeId}')
+    .document('recommendedItemLikes/{likeId}')
     .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try
         {
@@ -273,7 +264,7 @@ export const onRecommendationUnliked = functions.firestore
 
             let [recommendation, recommendationRef] = await getRecommendationInfo(docData);
 
-            recommendation.likeCount = recommendation.likeCount - 1;
+            recommendation.rate = recommendation.rate - 1;
 
             await recommendationRef.set(recommendation, {merge: true});
         }
