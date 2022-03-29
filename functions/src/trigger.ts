@@ -71,22 +71,22 @@ const getPostInfo = async (docData): Promise<[any, FirebaseFirestore.DocumentRef
     return [post, postRef];
 }
 
-const getUserData = async (docData) => {
+const getUserData = async (userId) => {
 
-    const userSnapshot = await db.collection('users').where('phone', '==', docData.userId).get();
+    const userSnapshot = await db.collection('users').where('phone', '==', userId).get();
     if(userSnapshot  == null || userSnapshot.docs == null || userSnapshot.docs.length == 0)
     {
         throw new Error("could not find user data for saved item user id");
     }
 
     const userData = userSnapshot.docs[0].exists ? userSnapshot.docs[0].data() : null;
-    if(userData == null)
+    const userRef = userSnapshot.docs[0].exists ? userSnapshot.docs[0].ref : null;
+    if(userData == null || userRef == null)
     {
         throw new Error("userData could not be set");
     }
-
     functions.logger.info(userData);
-    return userData
+    return [userData, userRef]
 }
 
 const saveItemData = async (docData, docRef, product, userData, recommendation = null, post = null) => {
@@ -143,7 +143,7 @@ export const onItemFavorited = functions.firestore
             product.favoriteCount = product.favoriteCount + 1;
             await productRef.set(product, {merge: true});
 
-            const userData = await getUserData(docData);
+            const userData = await getUserData(docData.userId);
 
             await saveItemData(docData, docRef, product, userData);
         }
@@ -176,13 +176,16 @@ export const onItemSaved = functions.firestore
             let docData = change.data();
             let docRef = change.ref;
 
-            const [product, productRef] = await getProductInfo(docData);
+            let [product, productRef] = await getProductInfo(docData);
 
-            product.saveCount = product.saveCount + 1;
+            product = {
+                ...product,
+                saveCount: product.saveCount + 1 || 1
+            }
 
             await productRef.set(product, {merge: true});
 
-            const userData = await getUserData(docData);
+            const [userData, _] = await getUserData(docData.userId);
 
             await saveItemData(docData, docRef, product, userData);
         }
@@ -197,9 +200,12 @@ export const onItemUnsaved = functions.firestore
         try{
             let docData = change.data();
 
-            const [product, productRef] = await getProductInfo(docData);
+            let [product, productRef] = await getProductInfo(docData);
 
-            product.saveCount = product.saveCount - 1;
+            product = {
+                ...product,
+                saveCount: product.saveCount - 1 || 0
+            }
 
             await productRef.set(product, {merge: true});
         }
@@ -217,10 +223,15 @@ export const onPostLiked = functions.firestore
             const docRef = change.ref;
 
             let [post, postRef] = await getPostInfo(docData);
-            post.rate = post.rate + 1;
+
+            post = {
+                ...post,
+                rate: post.rate + 1 || 1
+            }
+
             await postRef.set(post, {merge: true});
 
-            const userData = await getUserData(docData);
+            const [userData, _] = await getUserData(docData.userId);
 
             const [product, productRef] = await getProductInfo(docData);
 
@@ -240,7 +251,12 @@ export const onPostUnliked = functions.firestore
             const docData = change.data();
 
             let [post, postRef] = await getPostInfo(docData);
-            post.rate = post.rate - 1;
+
+            post = {
+                ...post,
+                rate: post.rate -1 || 0
+            }
+
             await postRef.set(post, {merge: true});
         }
         catch (e) {
@@ -258,10 +274,14 @@ export const onRecommendationLiked = functions.firestore
             const docRef = change.ref;
 
             let [recommendation, recommendationRef] = await getRecommendationInfo(docData);
-            recommendation.rate = recommendation.rate + 1;
+            recommendation =
+                {
+                    ...recommendation,
+                    rate: recommendation.rate + 1 || 1
+                }
             await recommendationRef.set(recommendation, {merge: true});
 
-            const userData = await getUserData(docData);
+            const [userData, _] = await getUserData(docData.userId);
 
             const [product, productRef] = await getProductInfo(docData);
 
@@ -281,7 +301,11 @@ export const onRecommendationUnliked = functions.firestore
 
             let [recommendation, recommendationRef] = await getRecommendationInfo(docData);
 
-            recommendation.rate = recommendation.rate - 1;
+            recommendation =
+                {
+                    ...recommendation,
+                    rate: recommendation.rate - 1 || 0
+                }
 
             await recommendationRef.set(recommendation, {merge: true});
         }
@@ -289,3 +313,77 @@ export const onRecommendationUnliked = functions.firestore
             functions.logger.error(e.message)
         }
     })
+
+export const onFollow = functions.firestore
+    .document('following/{followId}')
+    .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try {
+            let docData = change.data();
+
+            let [fromUserData, fromUserRef] = await getUserData(docData.fromUserId);
+            let [toUserData, toUserRef] = await getUserData(docData.toUserId);
+
+            fromUserData =
+            {
+                ...fromUserData,
+                followingCount: fromUserData.followingCount + 1|| 1
+            }
+
+            toUserData =
+            {
+                ...toUserData,
+                followerCount: toUserData.followerCount + 1 || 1
+            }
+
+            await fromUserRef.set(fromUserData, {merge: true});
+            await toUserRef.set(toUserData, {merge: true});
+
+            const docRef = change.ref;
+
+            docData = {
+                ...docData,
+                fromAuthor: fromUserData.name,
+                fromAuthorImage: fromUserData.localPath,
+                fromAuthorRemoteImage: fromUserData.remotePath,
+                fromAuthorScore: fromUserData.score,
+
+                toAuthor: toUserData.name,
+                toAuthorImage: toUserData.localPath,
+                toAuthorRemoteImage: toUserData.remotePath,
+                toAuthorScore: toUserData.score
+            }
+
+            await docRef.set(docData, {merge: true})
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    })
+
+export const onUnfollow = functions.firestore
+    .document('following/{followId}')
+    .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        try{
+            let docData = change.data();
+
+            let [fromUserData, fromUserRef] = await getUserData(docData.fromUserId);
+            let [toUserData, toUserRef] = await getUserData(docData.toUsedId);
+
+            fromUserData = {
+                ...fromUserData,
+                followingCount: fromUserData.followingCount - 1 || 0
+            }
+
+            toUserData = {
+                ...toUserData,
+                followerCount: toUserData.followerCount - 1 || 0
+            }
+
+            await fromUserRef.set(fromUserData, {merge: true});
+            await toUserRef.set(toUserData, {merge: true});
+
+        }
+        catch (e) {
+            functions.logger.error(e.message)
+        }
+    });

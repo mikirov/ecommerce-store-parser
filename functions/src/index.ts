@@ -10,7 +10,8 @@ export {addAllProductsToAlgolia, indexProduct, unindexProduct, updateProduct,
     indexBrand, updateBrand, unindexBrand, addAllBrandsToAlgolia} from './algolia';
 
 export {onItemFavorited, onItemUnfavorited, onItemSaved, onItemUnsaved,
-    onRecommendationLiked, onRecommendationUnliked, onPostLiked, onPostUnliked} from './trigger';
+    onRecommendationLiked, onRecommendationUnliked, onPostLiked, onPostUnliked,
+    onFollow, onUnfollow} from './trigger';
 
 import passport from 'passport';
 import {BasicStrategy} from "passport-http";
