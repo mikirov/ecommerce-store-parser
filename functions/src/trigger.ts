@@ -35,17 +35,15 @@ const getRecommendationInfo = async (docData): Promise<[any, FirebaseFirestore.D
         throw new Error("no document data");
     }
 
-    const recommendationSnapshot: FirebaseFirestore.DocumentData = await db.collection('recommendations').where('externalId', '==', docData.externalProductId).get();
-    if(recommendationSnapshot == null || recommendationSnapshot.docs == null || recommendationSnapshot.docs.length == 0)
+    const recommendationRef: FirebaseFirestore.DocumentReference = db.collection('recommendations').doc(docData.recommendationId);
+
+    const recommendationSnapshot: FirebaseFirestore.DocumentData = await recommendationRef.get();
+    if(recommendationSnapshot == null || !recommendationSnapshot.exists)
     {
-        throw new Error("couldn't find product");
+        throw new Error("couldn't find recommendation");
     }
-    const recommendation = recommendationSnapshot.docs[0].exists ? recommendationSnapshot.docs[0].data() as SOProduct : null;
-    const recommendationRef: FirebaseFirestore.DocumentReference = recommendationSnapshot.docs[0].exists ? recommendationSnapshot.docs[0].ref : null;
-    if(recommendation == null || recommendationRef == null)
-    {
-        throw new Error("data or ref are null");
-    }
+    const recommendation = recommendationSnapshot.data();
+
     functions.logger.info(recommendation);
     functions.logger.info(recommendationRef);
 
@@ -58,17 +56,15 @@ const getPostInfo = async (docData): Promise<[any, FirebaseFirestore.DocumentRef
         throw new Error("no document data");
     }
 
-    const postSnapshot: FirebaseFirestore.DocumentData = await db.collection('posts').where('externalId', '==', docData.externalProductId).get();
-    if(postSnapshot == null || postSnapshot.docs == null || postSnapshot.docs.length == 0)
+    const postRef = db.collection('posts').doc(docData.postId);
+
+    const postSnapshot: FirebaseFirestore.DocumentData = await postRef.get();
+    if(postSnapshot == null || !postSnapshot.exists)
     {
         throw new Error("couldn't find product");
     }
-    const post = postSnapshot.docs[0].exists ? postSnapshot.docs[0].data() as SOProduct : null;
-    const postRef: FirebaseFirestore.DocumentReference = postSnapshot.docs[0].exists ? postSnapshot.docs[0].ref : null;
-    if(post == null || postRef == null)
-    {
-        throw new Error("data or ref are null");
-    }
+    const post = postSnapshot.data();
+
     functions.logger.info(post);
     functions.logger.info(postRef);
 
@@ -93,7 +89,7 @@ const getUserData = async (docData) => {
     return userData
 }
 
-const saveItemData = async (docData, docRef, product, userData) => {
+const saveItemData = async (docData, docRef, product, userData, recommendation = null, post = null) => {
 
     docData = {
         ...docData,
@@ -101,15 +97,36 @@ const saveItemData = async (docData, docRef, product, userData) => {
         author: userData.name,
         authorImage: userData.localPath,
         authorRemoteImage: userData.remotePath,
-        score: userData.score,
+        authorScore: userData.score,
 
-        title: product.title,
-        brand: product.brand,
-        domain: product.domain,
-        favoriteCount: product.favoriteCount,
-        saveCount: product.saveCount,
+        productTitle: product.title,
+        productBrand: product.brand,
+        productDomain: product.domain,
+        productFavoriteCount: product.favoriteCount,
+        productSaveCount: product.saveCount,
         productLocalPath: product.localPath,
         productRemotePath: product.remotePath
+    }
+    if(recommendation)
+    {
+        docData = {
+            ...docData,
+            recommendationTitle: recommendation.title,
+            recommendationSubtitle: recommendation.subtitle,
+            recommendationDetails: recommendation.details,
+            recommendationRate: recommendation.rate
+        }
+    }
+
+    if(post)
+    {
+        docData = {
+            ...docData,
+            postTitle: post.title,
+            postSubtitle: post.subtitle,
+            postDetails: post.details,
+            postRate: post.rate
+        }
     }
 
     await docRef.set(docData, {merge: true});
@@ -207,7 +224,7 @@ export const onPostLiked = functions.firestore
 
             const [product, productRef] = await getProductInfo(docData);
 
-            await saveItemData(docData, docRef, product, userData);
+            await saveItemData(docData, docRef, product, userData, null, post);
 
         }
         catch (e) {
@@ -248,7 +265,7 @@ export const onRecommendationLiked = functions.firestore
 
             const [product, productRef] = await getProductInfo(docData);
 
-            await saveItemData(docData, docRef, product, userData);
+            await saveItemData(docData, docRef, product, userData, recommendation, null);
         }
         catch (e) {
             functions.logger.error(e.message)
