@@ -28,7 +28,7 @@ initializeApp({
     credential: cert(firebaseServiceAccount)
 });
 
-const db = getFirestore();
+const db = admin.firestore();
 
 passport.use(new BasicStrategy(
     async function(userid: string, password: string, done: any) {
