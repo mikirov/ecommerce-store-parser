@@ -327,27 +327,12 @@ app.post("/recalculate", async (req: Express.Request, res: Express.Response) => 
 
 })
 
+
+
 app.post("/recalculateUser", async (req: Express.Request, res: Express.Response) => {
     try
     {
-        let [user, userRef] = await getUserData(req.body.userId);
-        user = {
-            ...user,
-        }
-        const followingSnapshot = await db.collection('following').where('fromUserId', '==', req.body.userId).get();
-        const followingCount = followingSnapshot.docs.filter(doc => doc.exists).length;
-
-        const followersSnapshot = await db.collection('following').where('toUserId', '==', req.body.userId).get();
-        const followerCount = followersSnapshot.docs.filter(doc => doc.exists).length;
-
-        user =
-            {
-                followerCount,
-                followingCount,
-                dateUpdated: Date.now()
-            }
-        //this will trigger user update which will propagate changes to all other collections
-        await userRef.set(user, {merge: true});
+        await recalculateUserCounters(db, req.body.userId);
         res.status(200).send("OK");
 
     } catch (e) {
@@ -359,22 +344,7 @@ app.post("/recalculateUser", async (req: Express.Request, res: Express.Response)
 app.post("/recalculateProduct", async (req: Express.Request, res: Express.Response) => {
     try
     {
-        let [product, productRef] = await getProductInfo(req.body.externalId);
-
-        const savedSnapshot = await db.collection('savedItems').where('externalProductId', '==', product.externalId).get();
-        const saveCount = savedSnapshot.docs.filter(doc => doc.exists).length;
-
-        const favoriteSnapshot = await db.collection('favoriteItems').where('externalProductId', '==', product.externalId).get();
-        const favoriteCount = favoriteSnapshot.docs.filter(doc => doc.exists).length;
-
-        product = {
-            ...product,
-            saveCount,
-            favoriteCount,
-            dateUpdated: Date.now()
-        }
-
-        await productRef.set(product, {merge: true});
+        await recalculateProductCounters(db, req.body.externalId);
         res.status(200).send("OK");
 
     } catch (e) {
@@ -408,3 +378,11 @@ exports.appv2 = functions
         memory: '8GB',
         timeoutSeconds: 540
     }).https.onRequest(app);
+function recalculateUserCounters(db: firestore.Firestore, userId: any) {
+    throw new Error('Function not implemented.');
+}
+
+function recalculateProductCounters(db: firestore.Firestore, externalId: any) {
+    throw new Error('Function not implemented.');
+}
+

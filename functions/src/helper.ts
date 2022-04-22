@@ -3,6 +3,13 @@ import * as functions from "firebase-functions";
 import admin from 'firebase-admin';
 import {SOProduct} from "./soproduct";
 
+export const ACCOUNT_CREATION_CLOUT_POINTS = 50;
+export const ADD_BIO_CLOUT_POINTS = 20;
+export const ADD_FAVORITE_CLOUT_POINTS = 50;
+export const ADD_RECOMMENDATION_CLOUT_POINTS = 75;
+export const ADD_POST_CLOUT_POINTS = 75;
+export const ADD_SAVE_CLOUT_POINTS = 25;
+
 export const getProductInfo = async (externalProductId:string): Promise<[any, FirebaseFirestore.DocumentReference]> => {
 
     const productsSnapshot: FirebaseFirestore.DocumentData = await admin.firestore().collection('products').where('externalId', '==', externalProductId).get();
@@ -92,4 +99,99 @@ export const getUserData = async (userId: string) => {
     }
     functions.logger.info(userData);
     return [userData, userRef]
+}
+
+export const updateUserCounters = async(db: any, userId: string) => {
+    let [user, userRef] = await getUserData(userId);
+
+    const followingSnapshot = await db.collection('following').where('fromUserId', '==', userId).get();
+    const followingCount = followingSnapshot.docs.filter(doc => doc.exists).length;
+
+    const followersSnapshot = await db.collection('following').where('toUserId', '==', userId).get();
+    const followerCount = followersSnapshot.docs.filter(doc => doc.exists).length;
+
+    const savedSnapshot = await db.collection('savedItems').where('userId', '==', userId).get();
+    const savedCount = savedSnapshot.docs.filter(doc => doc.exists).length;
+
+    const postSnapshot = await db.collection('posts').where('userId', '==', userId).get();
+    const postCount = postSnapshot.docs.filter(doc => doc.exists).length;
+
+    const favoriteSnapshot = await db.collection('favoriteItems').where('userId', '==', userId).get();
+    const favoriteCount = favoriteSnapshot.docs.filter(doc => doc.exists).length;
+
+    const recommendationSnapshot = await db.collection('recommendations').where('userId', '==', userId).get();
+    const recommendationCount = recommendationSnapshot.docs.filter(doc => doc.exists).length;
+
+    let clout = ACCOUNT_CREATION_CLOUT_POINTS;
+    if(user.bio)
+    {
+        clout += ADD_BIO_CLOUT_POINTS;
+    }
+
+    if(savedCount > 0)
+    {
+        clout += savedCount * ADD_SAVE_CLOUT_POINTS;
+    }
+
+    if(postCount > 0)
+    {
+        clout += postCount * ADD_POST_CLOUT_POINTS;
+    }
+
+    if(recommendationCount > 0)
+    {
+        clout += recommendationCount * ADD_RECOMMENDATION_CLOUT_POINTS;
+    }
+
+    if(favoriteCount > 0)
+    {
+        clout += favoriteCount * ADD_FAVORITE_CLOUT_POINTS;
+    }
+
+    user =
+        {
+            ...user,
+            followerCount,
+            followingCount,
+            clout
+            //dateUpdated: admin.firestore.FieldValue.serverTimestamp()
+        }
+    //this will trigger user update which will propagate changes to all other collections
+    await userRef.set(user, {merge: true});
+}
+
+export const updateProductCounters = async (db: any, externalId: string) => {
+
+    let [product, productRef] = await getProductInfo(externalId);
+
+    const savedSnapshot = await db.collection('savedItems').where('externalProductId', '==', product.externalId).get();
+    const saveCount: number = savedSnapshot.docs.filter(doc => doc.exists).length;
+
+    const favoriteSnapshot = await db.collection('favoriteItems').where('externalProductId', '==', product.externalId).get();
+    const favoriteCount: number = favoriteSnapshot.docs.filter(doc => doc.exists).length;
+
+    const postSnapshot = await db.collection('posts').where('externalProductId', '==', product.externalId).get();
+    const postCount: number = postSnapshot.docs.filter(doc => doc.exists).length;
+
+    const recommendationSnapshot = await db.collection('recommendations').where('externalProductId', '==', product.externalId).get();
+    const recommendationCount: number = recommendationSnapshot.docs.filter(doc => doc.exists).length;
+
+    const postLikesSnapshot = await db.collection('postedItemLikes').where('externalProductId', '==', product.externalId).get();
+    const totalPostLikes: number = postLikesSnapshot.docs.filter(doc => doc.exists).length;
+
+    const recommendationLikesSnapshot = await db.collection('recommendedItemLikes').where('externalProductId', '==', product.externalId).get();
+    const totalRecommendationLikes: number = recommendationLikesSnapshot.docs.filter(doc => doc.exists).length;
+
+
+    product = {
+        ...product,
+        saveCount,
+        favoriteCount,
+        postCount,
+        recommendationCount,
+        totalPostLikes,
+        totalRecommendationLikes
+    }
+
+    await productRef.set(product, {merge: true});
 }

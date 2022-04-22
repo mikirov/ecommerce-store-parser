@@ -4,16 +4,14 @@ import {Change, EventContext} from "firebase-functions";
 
 import admin from 'firebase-admin';
 import {SOProduct} from "./soproduct";
-import {getBrandInfo, getPostInfo, getProductInfo, getRecommendationInfo, getUserData } from './helper';
+import {ACCOUNT_CREATION_CLOUT_POINTS, ADD_BIO_CLOUT_POINTS, ADD_FAVORITE_CLOUT_POINTS,
+    ADD_POST_CLOUT_POINTS,
+    ADD_RECOMMENDATION_CLOUT_POINTS,
+    ADD_SAVE_CLOUT_POINTS, getBrandInfo, getPostInfo, getProductInfo, getRecommendationInfo, getUserData,
+    updateProductCounters, updateUserCounters } from './helper';
 const  db = admin.firestore();
 //db.settings({ ignoreUndefinedProperties: true });
 
-const ADD_BIO_CLOUT_POINTS = 20;
-const CREATE_ACCOUNT_CLOUT_POINTS = 50;
-const ADD_FAVORITE_CLOUT_POINTS = 50;
-const ADD_RECOMMENDATION_CLOUT_POINTS = 75;
-const ADD_POST_CLOUT_POINTS = 75;
-const ADD_SAVE_CLOUT_POINTS = 25;
 
 const saveItemData = async (docData, docRef, product, userData, recommendation = null, post = null) => {
 
@@ -166,10 +164,8 @@ export const onPostCreate = functions.firestore
         try {
 
             const docData = change.data();
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout + ADD_POST_CLOUT_POINTS;
-            userRef.set(userData, {merge: true});
-
+            await updateUserCounters(db, docData.userId)
+            await updateProductCounters(db, docData.externalProductId);
         }
         catch (e) {
             functions.logger.error(e.message);
@@ -183,9 +179,8 @@ export const onPostDelete = functions.firestore
         try
         {
             const docData = change.data();
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout + ADD_POST_CLOUT_POINTS;
-            userRef.set(userData, {merge: true});
+            await updateUserCounters(db, docData.userId)
+            await updateProductCounters(db, docData.externalProductId);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -213,6 +208,8 @@ export const onPostLiked = functions.firestore
 
             await saveItemData(docData, docRef, product, userData, null, post);
 
+            await updateProductCounters(db, docData.externalProductId);
+
             await postRef.set(post, {merge: true});
         }
         catch (e) {
@@ -235,6 +232,8 @@ export const onPostUnliked = functions.firestore
             }
 
             await postRef.set(post, {merge: true});
+
+            await updateProductCounters(db, docData.externalProductId);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -263,6 +262,8 @@ export const onRecommendationLiked = functions.firestore
 
             await saveItemData(docData, docRef, product, userData, recommendation, null);
 
+            await updateProductCounters(db, docData.externalProductId);
+
             await recommendationRef.set(recommendation, {merge: true});
         }
         catch (e) {
@@ -284,6 +285,9 @@ export const onRecommendationUnliked = functions.firestore
                     ...recommendation,
                     rate: recommendation.rate - 1 || 0
                 }
+
+
+            await updateProductCounters(db, docData.externalProductId);
 
             await recommendationRef.set(recommendation, {merge: true});
         }
@@ -450,6 +454,8 @@ export const onProductUpdate = functions.firestore
             const prev = change.before.data();
             if(JSON.stringify(prev) !== JSON.stringify(current))
             {
+                await updateProductCounters(db, current.externalId);
+
                 await updateProductFieldsInCollection('favoriteItems', current);
                 await updateProductFieldsInCollection('savedItems', current);
                 await updateProductFieldsInCollection('recommendations', current);
@@ -532,6 +538,9 @@ export const onUserUpdate = functions.firestore
             }
             if(JSON.stringify(prev) !== JSON.stringify(current)) //HACK: check by value instead of by reference
             {
+                //recalculate user counters on update
+                //WARNING this may trigger loop update
+                await updateUserCounters(db, current.phone);
                 //clout points when bio set
                 if(current.bio && !prev.bio)
                 {
@@ -571,9 +580,21 @@ export const onUserCreate = functions.firestore
     .document('users/{userId}')
     .onCreate(async (snap: QueryDocumentSnapshot, context: EventContext) => {
         try{
-            const data = snap.data();
+            let data = snap.data();
             const userRef = snap.ref;
-            data.clout = 50;
+            data = {
+                ...data,
+                clout: ACCOUNT_CREATION_CLOUT_POINTS,
+                dateAdded: admin.firestore.FieldValue.serverTimestamp()
+            }
+
+            const followDocRef = db.collection('following').doc();
+            const followDocData = {
+                fromUserId: "+19493389438",//TODO: get id from admin collection for example
+                toUserId: data.phone
+            };
+            await followDocRef.set(followDocData, {merge: true});
+
             await userRef.set(data, {merge: true});
         }
         catch (e) {
@@ -596,7 +617,7 @@ const updatePostFieldsInCollection = async(collectionName: string, postData: any
 
         const dataToUpdate = {
             postRate: postData.rate,
-            postTile: postData.title,
+            postTitle: postData.title,
             postsSubtitle: postData.subtitle
         }
 
@@ -630,8 +651,11 @@ export const onPostUpdate = functions.firestore
 
             await saveItemData(current, docRef, product, userData);
 
+            await updateProductCounters(db, current.externalProductId);
+
             if(JSON.stringify(prev) !== JSON.stringify(current))
             {
+
                 const currentId: string = change.after.ref.id;
                 await updatePostFieldsInCollection('postedItemLikes', current, currentId);
             }
@@ -704,8 +728,12 @@ export const onRecommendationCreate = functions.firestore
         try{
             let docData = change.data();
 
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout + ADD_RECOMMENDATION_CLOUT_POINTS;
+            let [userData, userRef] = await getUserData(docData.userId as string);
+            userData = {
+                ...userData,
+                clout: userData.clout + ADD_RECOMMENDATION_CLOUT_POINTS || ADD_RECOMMENDATION_CLOUT_POINTS,
+                dateUpdated: admin.firestore.FieldValue.serverTimestamp()
+            }
             userRef.set(userData, {merge: true});
         }
         catch (e) {
@@ -719,8 +747,12 @@ export const onRecommendationDelete = functions.firestore
         try{
             let docData = snapshot.data();
 
-            const [userData, userRef] = await getUserData(docData.userId);
-            userData.clout = userData.clout - ADD_RECOMMENDATION_CLOUT_POINTS || 0;
+            let [userData, userRef] = await getUserData(docData.userId);
+            userData = {
+                ...userData,
+                clout: userData.clout - ADD_RECOMMENDATION_CLOUT_POINTS || 0,
+                dateUpdated: admin.firestore.FieldValue.serverTimestamp()
+            }
             userRef.set(userData, {merge: true});
 
         }
@@ -816,3 +848,4 @@ export const onActivityDelete = functions.firestore
             functions.logger.error(e.message)
         }
     })
+
