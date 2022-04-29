@@ -27,7 +27,9 @@
     "passport-http": "^0.3.0",
     "sitemapper": "^3.2.2",
     "url-metadata": "^2.5.0",
-    "util": "^0.12.4"
+    "util": "^0.12.4",
+    "unirest": "^0.6.0",
+    "twilio": "^3.76.1"
   },
   "devDependencies": {
     "@types/algoliasearch": "^4.0.0",

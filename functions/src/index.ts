@@ -13,15 +13,17 @@ export {addAllProductsToAlgolia, indexProduct, unindexProduct, updateProduct,
     indexBrand, updateBrand, unindexBrand, addAllBrandsToAlgolia} from './algolia';
 
 export {onItemFavorited, onItemUnfavorited, onItemSaved, onItemUnsaved,
-    onPostLiked, onPostUnliked, onPostCreate, onPostDelete,
+    onPostLiked, onPostUnliked,
+    onPostCreate, onPostUpdate, onPostDelete,
     onFollow, onUnfollow,
-    onProductUpdate, onUserUpdate, onPostUpdate,
+    onProductUpdate,
+    onUserCreate, onUserUpdate,
     onRecommendationUpdate, onRecommendationCreate, onRecommendationDelete, onRecommendationLiked, onRecommendationUnliked,
-    onActivityCreated, onActivityDelete, } from './trigger';
+    onActivityCreated} from './trigger';
 
 import passport from 'passport';
 import {BasicStrategy} from "passport-http";
-import {getPostInfo, getProductInfo, getRecommendationInfo, getUserData } from './helper';
+import {getPostInfo, getProductInfo, getRecommendationInfo, getUserData, updateProductCounters, updateUserCounters } from './helper';
 import express from 'express';
 passport.use(new BasicStrategy(
     async function(userid: string, password: string, done: any) {
@@ -332,7 +334,7 @@ app.post("/recalculate", async (req: Express.Request, res: Express.Response) => 
 app.post("/recalculateUser", async (req: Express.Request, res: Express.Response) => {
     try
     {
-        await recalculateUserCounters(db, req.body.userId);
+        await updateUserCounters(db, req.body.userId);
         res.status(200).send("OK");
 
     } catch (e) {
@@ -344,7 +346,7 @@ app.post("/recalculateUser", async (req: Express.Request, res: Express.Response)
 app.post("/recalculateProduct", async (req: Express.Request, res: Express.Response) => {
     try
     {
-        await recalculateProductCounters(db, req.body.externalId);
+        await updateProductCounters(db, req.body.externalId);
         res.status(200).send("OK");
 
     } catch (e) {
@@ -378,11 +380,3 @@ exports.appv2 = functions
         memory: '8GB',
         timeoutSeconds: 540
     }).https.onRequest(app);
-function recalculateUserCounters(db: firestore.Firestore, userId: any) {
-    throw new Error('Function not implemented.');
-}
-
-function recalculateProductCounters(db: firestore.Firestore, externalId: any) {
-    throw new Error('Function not implemented.');
-}
-

@@ -4,11 +4,16 @@ import {Change, EventContext} from "firebase-functions";
 
 import admin from 'firebase-admin';
 import {SOProduct} from "./soproduct";
-import {ACCOUNT_CREATION_CLOUT_POINTS, ADD_BIO_CLOUT_POINTS, ADD_FAVORITE_CLOUT_POINTS,
+import {ACCOUNT_CREATION_CLOUT_POINTS, addFollowActivity, ADD_BIO_CLOUT_POINTS, ADD_FAVORITE_CLOUT_POINTS,
     ADD_POST_CLOUT_POINTS,
     ADD_RECOMMENDATION_CLOUT_POINTS,
-    ADD_SAVE_CLOUT_POINTS, getBrandInfo, getPostInfo, getProductInfo, getRecommendationInfo, getUserData,
-    updateProductCounters, updateUserCounters } from './helper';
+    ADD_SAVE_CLOUT_POINTS, deleteAllLikesForRecommendation, getBrandInfo,
+    getNumberProductsFavoritedByUser, getPostInfo, getProductInfo, getRecommendationInfo, getUserData,
+    hasUserLikedRecommendation,
+    PREFERRED_USER_FAVORITE_THRESHOLD,
+    sendPushNotification,
+    updatePostCounters,
+    updateProductCounters, updateProductFieldsInCollection, updateRecommendationCounters, updateUserCounters } from './helper';
 const  db = admin.firestore();
 //db.settings({ ignoreUndefinedProperties: true });
 
@@ -22,6 +27,9 @@ const saveItemData = async (docData, docRef, product, userData, recommendation =
         authorImage: userData.localPath || "",
         authorRemoteImage: userData.remotePath || "",
         authorScore: userData.clout || "",
+        authorIsBrand: userData.isBrand,
+        authorIsApproved: userData.isApproved,
+        authorIsPreferred: userData.isPreferred,
 
         productTitle: product.title || "",
         productBrand: product.brand || "",
@@ -60,23 +68,18 @@ const saveItemData = async (docData, docRef, product, userData, recommendation =
 export const onItemFavorited = functions.firestore
     .document('favoriteItems/{favoriteItemId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
-        try {
-            const docRef = change.ref;
-            let docData = change.data();
+        const docRef = change.ref;
+        let docData = change.data();
+
+        try
+        {
+            await updateUserCounters(db, docData.userId);
+            await updateProductCounters(db, docData.externalProductId);
+
+            let [userData, userRef] = await getUserData(docData.userId);
             let [product, productRef] = await getProductInfo(docData.externalProductId);
-
-            product =
-                {...product,
-                favoriteCount: product.favoriteCount + 1 || 1
-                }
-
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout + ADD_FAVORITE_CLOUT_POINTS;
-            userRef.set(userData, {merge: true});
-
             await saveItemData(docData, docRef, product, userData);
 
-            await productRef.set(product, {merge: true});
         }
         catch (e) {
             functions.logger.error(e.message);
@@ -88,17 +91,8 @@ export const onItemUnfavorited = functions.firestore
     .onDelete(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try{
             let docData = change.data();
-            let [product, productRef] = await getProductInfo(docData.externalProductId);
-
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout - ADD_FAVORITE_CLOUT_POINTS;
-            userRef.set(userData, {merge: true});
-
-            product =
-                {...product,
-                    favoriteCount: product.favoriteCount - 1 || 0}
-
-            await productRef.set(product, {merge: false});
+            await updateUserCounters(db, docData.userId);
+            await updateProductCounters(db, docData.externalProductId);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -108,25 +102,17 @@ export const onItemUnfavorited = functions.firestore
 export const onItemSaved = functions.firestore
     .document('savedItems/{savedItemId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
-        try {
+        let docData = change.data();
+        let docRef = change.ref;
 
-            let docData = change.data();
-            let docRef = change.ref;
+        try
+        {
+            await updateUserCounters(db, docData.userId);
+            await updateProductCounters(db, docData.externalProductId);
 
+            const [userData, userRef] = await getUserData(docData.userId);
             let [product, productRef] = await getProductInfo(docData.externalProductId);
-
-            product = {
-                ...product,
-                saveCount: product.saveCount + 1 || 1
-            }
-
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout + ADD_SAVE_CLOUT_POINTS;
-            userRef.set(userData, {merge: true});
-
             await saveItemData(docData, docRef, product, userData);
-
-            await productRef.set(product, {merge: true});
         }
         catch (e) {
             functions.logger.error(e.message);
@@ -140,18 +126,9 @@ export const onItemUnsaved = functions.firestore
         try{
             let docData = change.data();
 
-            const [userData, userRef] = await getUserData(docData.userId as string);
-            userData.clout = userData.clout - ADD_SAVE_CLOUT_POINTS;
-            userRef.set(userData, {merge: true});
+            await updateUserCounters(db, docData.userId);
+            await updateProductCounters(db, docData.externalProductId);
 
-            let [product, productRef] = await getProductInfo(docData.externalProductId);
-
-            product = {
-                ...product,
-                saveCount: product.saveCount - 1 || 0
-            }
-
-            await productRef.set(product, {merge: true});
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -166,6 +143,8 @@ export const onPostCreate = functions.firestore
             const docData = change.data();
             await updateUserCounters(db, docData.userId)
             await updateProductCounters(db, docData.externalProductId);
+
+            //TODO:
         }
         catch (e) {
             functions.logger.error(e.message);
@@ -190,27 +169,18 @@ export const onPostDelete = functions.firestore
 export const onPostLiked = functions.firestore
     .document('postedItemLikes/{likeId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
+        const docData = change.data();
+        const docRef = change.ref;
+
         try
         {
-            const docData = change.data();
-            const docRef = change.ref;
-
             let [post, postRef] = await getPostInfo(docData.postId);
-
-            post = {
-                ...post,
-                rate: post.rate + 1 || 0
-            }
-
             const [userData, _] = await getUserData(docData.userId);
-
             const [product, productRef] = await getProductInfo(docData.externalProductId);
-
             await saveItemData(docData, docRef, product, userData, null, post);
 
             await updateProductCounters(db, docData.externalProductId);
-
-            await postRef.set(post, {merge: true});
+            await updatePostCounters(db, docData.postId);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -240,7 +210,6 @@ export const onPostUnliked = functions.firestore
         }
     })
 
-
 export const onRecommendationLiked = functions.firestore
     .document('recommendedItemLikes/{likeId}')
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
@@ -249,22 +218,22 @@ export const onRecommendationLiked = functions.firestore
             const docData = change.data();
             const docRef = change.ref;
 
-            let [recommendation, recommendationRef] = await getRecommendationInfo(docData.recommendationId);
-            recommendation =
-                {
-                    ...recommendation,
-                    rate: recommendation.rate + 1 || 0
-                }
+            const hasLikedRecommendation: boolean = await hasUserLikedRecommendation(db, docData.recommendationId, docData.userId);
+            if(hasLikedRecommendation)
+            {
+                functions.logger.error("User " + docData.userId + "cannot like recommendation " + docData.recommendationId + " twice");
+                await docRef.delete();
+                return;
+            }
 
             const [userData, _] = await getUserData(docData.userId);
-
             const [product, productRef] = await getProductInfo(docData.externalProductId);
-
+            let [recommendation, recommendationRef] = await getRecommendationInfo(docData.recommendationId);
             await saveItemData(docData, docRef, product, userData, recommendation, null);
 
             await updateProductCounters(db, docData.externalProductId);
+            await updateRecommendationCounters(db, docData.recommendationId);
 
-            await recommendationRef.set(recommendation, {merge: true});
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -278,18 +247,15 @@ export const onRecommendationUnliked = functions.firestore
         {
             const docData = change.data();
 
-            let [recommendation, recommendationRef] = await getRecommendationInfo(docData.recommendationId);
+            const hasLikedRecommendation: boolean = await hasUserLikedRecommendation(db, docData.recommendationId, docData.userId);
+            if(!hasLikedRecommendation)
+            {
+                functions.logger.error("User " + docData.userId + "has not liked recommendation " + docData.recommendationId + "that they're trying to unlike")
+                return;
+            }
 
-            recommendation =
-                {
-                    ...recommendation,
-                    rate: recommendation.rate - 1 || 0
-                }
-
-
+            await updateRecommendationCounters(db, docData.recommendationId);
             await updateProductCounters(db, docData.externalProductId);
-
-            await recommendationRef.set(recommendation, {merge: true});
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -302,38 +268,23 @@ export const onFollow = functions.firestore
         try {
             let docData = change.data();
 
+            if(docData.fromUserId === docData.toUserId)
+            {
+                throw new Error("fromUserId and toUserId cannot be the same");
+            }
+
+            await updateUserCounters(db, docData.fromUserId);
+            await updateUserCounters(db, docData.toUserId);
 
             let [fromUserData, fromUserRef] = await getUserData(docData.fromUserId);
             let [toUserData, toUserRef] = await getUserData(docData.toUserId);
 
-            if (docData.fromUserId === docData.toUserId) {
-                //TEMP, REMOVE FOR PRODUCTION:
+            await addFollowActivity(db, fromUserRef, toUserRef, fromUserData);
 
-                fromUserData =
-                    {
-                        ...fromUserData,
-                        followingCount: fromUserData.followingCount + 1 || 0,
-                        followerCount: fromUserData.followerCount + 1 || 0
-                    }
-                // throw new Error("A uesr cannot follow themselves");
-            } else
-            {
-
-                fromUserData =
-                    {
-                        ...fromUserData,
-                        followingCount: fromUserData.followingCount + 1 || 0
-                    }
-
-                toUserData =
-                    {
-                        ...toUserData,
-                        followerCount: toUserData.followerCount + 1 || 0
-                    }
-            }
+            const pushNotificationMessage = fromUserData.name + " started following you.";
+            await sendPushNotification(toUserData.fcmToken, pushNotificationMessage);
 
             const docRef = change.ref;
-
             docData = {
                 ...docData,
                 fromAuthor: fromUserData.name || "",
@@ -346,15 +297,8 @@ export const onFollow = functions.firestore
                 toAuthorRemoteImage: toUserData.remotePath || "",
                 toAuthorScore: toUserData.clout || 0
             }
-
             await docRef.set(docData, {merge: true})
 
-            await fromUserRef.set(fromUserData, {merge: true});
-
-            if(docData.fromUserId !== docData.toUserId)
-            {
-                await toUserRef.set(toUserData, {merge: true});
-            }
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -413,39 +357,6 @@ export const onUnfollow = functions.firestore
         }
     });
 
-const updateProductFieldsInCollection = async(collectionName: string, productData) => {
-
-    const batchArray = [];
-    batchArray.push(db.batch());
-    let operationCounter = 0;
-    let batchIndex = 0;
-
-    const snapshot = await db.collection(collectionName).where('externalProductId', '==', productData.externalId).get();
-    snapshot.forEach(documentSnapshot => {
-        if(!documentSnapshot.exists) return;
-
-        const dataToUpdate = {
-            productBrand: productData.brand,
-            productDomain: productData.domain,
-            productLocalPath: productData.localPath,
-            productRemotePath: productData.remotePath,
-            productTitle: productData.title,
-            productSaveCount: productData.saveCount,
-            productFavoriteCount: productData.favoriteCount}
-
-        batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
-        operationCounter++;
-
-        if (operationCounter === 499) {
-            batchArray.push(db.batch());
-            batchIndex++;
-            operationCounter = 0;
-        }
-    });
-    await Promise.all(batchArray.map(batch => batch.commit()))
-    //batchArray.forEach(async batch => await batch.commit());
-}
-
 export const onProductUpdate = functions.firestore
     .document('products/{productId}')
     .onUpdate(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
@@ -455,27 +366,26 @@ export const onProductUpdate = functions.firestore
             if(JSON.stringify(prev) !== JSON.stringify(current))
             {
                 await updateProductCounters(db, current.externalId);
-
-                await updateProductFieldsInCollection('favoriteItems', current);
-                await updateProductFieldsInCollection('savedItems', current);
-                await updateProductFieldsInCollection('recommendations', current);
-                await updateProductFieldsInCollection('recommendedItemLikes', current);
-                await updateProductFieldsInCollection('postedItemLikes', current);
+                await updateProductFieldsInCollection(db, 'favoriteItems', current);
+                await updateProductFieldsInCollection(db, 'savedItems', current);
+                await updateProductFieldsInCollection(db, 'recommendations', current);
+                await updateProductFieldsInCollection(db, 'recommendedItemLikes', current);
+                await updateProductFieldsInCollection(db, 'postedItemLikes', current);
             }
         }
         catch (e) {
-            functions.logger.error(e.message)
+            functions.logger.error(e.message);
         }
     })
 
-const updateUserFieldsInCollection = async(collectionName: string, idToCheck: string, userData) => {
+const updateUserFieldsInCollection = async(collectionName: string, idToCheck: string, id: string, userData) => {
 
     const batchArray = [];
     batchArray.push(db.batch());
     let operationCounter = 0;
     let batchIndex = 0;
 
-    const snapshot = await db.collection(collectionName).where(idToCheck, '==', userData.phone).get();
+    const snapshot = await db.collection(collectionName).where(idToCheck, '==', id).get();
     snapshot.forEach(documentSnapshot => {
         if(!documentSnapshot.exists) return;
 
@@ -487,25 +397,39 @@ const updateUserFieldsInCollection = async(collectionName: string, idToCheck: st
                     author: userData.name,
                     authorScore: userData.clout,
                     authorImage: userData.localPath,
-                    authorRemoteImage: userData.remotePath}
+                    authorRemoteImage: userData.remotePath,
+                    authorIsBrand: userData.isBrand,
+                    authorIsApproved: userData.isApproved,
+                    authorIsPreferred: userData.isPreferred
+                }
             }
             break;
             case 'fromUserId':
             {
-                dataToUpdate = {
+                dataToUpdate =
+                {
                     fromAuthor: userData.name,
                     fromAuthorScore: userData.clout,
                     fromAuthorImage: userData.localPath,
-                    fromAuthorRemoteImage: userData.remotePath}
+                    fromAuthorRemoteImage: userData.remotePath,
+                    fromAuthorIsBrand: userData.isBrand,
+                    fromAuthorIsApproved: userData.isApproved,
+                    fromAuthorIsPreferred: userData.isPreferred
+                }
             }
             break;
             case 'toUserId':
             {
-                dataToUpdate = {
+                dataToUpdate =
+                {
                     toAuthor: userData.name,
                     toAuthorScore: userData.clout,
                     toAuthorImage: userData.localPath,
-                    toAuthorRemoteImage: userData.remotePath}
+                    toAuthorRemoteImage: userData.remotePath,
+                    toAuthorIsBrand: userData.isBrand,
+                    toAuthorIsApproved: userData.isApproved,
+                    toAuthorIsPreferred: userData.isPreferred
+                }
             }
             break;
         }
@@ -529,6 +453,7 @@ export const onUserUpdate = functions.firestore
     .onUpdate(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
         try{
             const current = change.after.data();
+            const docId = change.after.id;
             const prev = change.before.data();
             const userRef = change.after.ref;
             if(current.isBrand)
@@ -538,32 +463,18 @@ export const onUserUpdate = functions.firestore
             }
             if(JSON.stringify(prev) !== JSON.stringify(current)) //HACK: check by value instead of by reference
             {
-                //recalculate user counters on update
-                //WARNING this may trigger loop update
-                await updateUserCounters(db, current.phone);
-                //clout points when bio set
-                if(current.bio && !prev.bio)
-                {
-                    current.clout = current.clout + ADD_BIO_CLOUT_POINTS || ADD_BIO_CLOUT_POINTS;
-                    userRef.set(current, {merge: true})
-                }
-                // remove bio points when removed
-                else if(!current.bio && prev.bio)
-                {
-                    current.clout = current.clout - ADD_BIO_CLOUT_POINTS || 0;
-                    userRef.set(current, {merge: true})
-                }
+                await updateUserCounters(db, docId);
 
-                await updateUserFieldsInCollection('favoriteItems', 'userId', current);
-                await updateUserFieldsInCollection('savedItems', 'userId', current);
-                await updateUserFieldsInCollection('following', 'fromUserId', current);
-                await updateUserFieldsInCollection('following', 'toUserId', current);
-                await updateUserFieldsInCollection('recommendedItemLikes', 'userId', current);
-                await updateUserFieldsInCollection('postedItemLikes', 'userId', current);
-                await updateUserFieldsInCollection('posts', 'userId', current);
-                await updateUserFieldsInCollection('recommendations', 'userId', current);
-                await updateUserFieldsInCollection('activityItems', 'fromUserId', current);
-                await updateUserFieldsInCollection('recommendations', 'toUserId', current);
+                await updateUserFieldsInCollection('favoriteItems', 'userId',docId, current);
+                await updateUserFieldsInCollection('savedItems', 'userId',docId, current);
+                await updateUserFieldsInCollection('following', 'fromUserId', docId, current);
+                await updateUserFieldsInCollection('following', 'toUserId', docId, current);
+                await updateUserFieldsInCollection('recommendedItemLikes', 'userId', docId, current);
+                await updateUserFieldsInCollection('postedItemLikes', 'userId', docId, current);
+                await updateUserFieldsInCollection('posts', 'userId', docId, current);
+                await updateUserFieldsInCollection('recommendations', 'userId', docId, current);
+                await updateUserFieldsInCollection('activityItems', 'fromUserId', docId, current);
+                await updateUserFieldsInCollection('recommendations', 'toUserId', docId, current);
 
             }
             else
@@ -581,19 +492,30 @@ export const onUserCreate = functions.firestore
     .onCreate(async (snap: QueryDocumentSnapshot, context: EventContext) => {
         try{
             let data = snap.data();
+            const toUserId = snap.id;
             const userRef = snap.ref;
+            functions.logger.info("User id: " + toUserId);
             data = {
                 ...data,
                 clout: ACCOUNT_CREATION_CLOUT_POINTS,
                 dateAdded: admin.firestore.FieldValue.serverTimestamp()
             }
 
-            const followDocRef = db.collection('following').doc();
-            const followDocData = {
-                fromUserId: "+19493389438",//TODO: get id from admin collection for example
-                toUserId: data.phone
-            };
-            await followDocRef.set(followDocData, {merge: true});
+            const fromUserIds =
+                [
+                    "iuPSTErBDTMhH7MIjU3G", // Mihail
+                    "LL68KTDxGltU560nV8eF", //Tor
+                    "GV22E5KrJ4IdDQhITvs6", //Jane
+                ]
+            const promises = fromUserIds.map((fromUserId: string) => {
+                const followDocRef = db.collection('following').doc();
+                const followDocData = {
+                    fromUserId,
+                    toUserId
+                };
+            });
+
+            await Promise.all(promises);
 
             await userRef.set(data, {merge: true});
         }
@@ -642,80 +564,57 @@ export const onPostUpdate = functions.firestore
 
             const current = change.after.data();
             const prev = change.before.data();
+            if(JSON.stringify(prev) === JSON.stringify(current))
+            {
+                functions.logger.error("Shouldn't do anything when data is not updated");
+                return;
+            }
 
             const docRef = change.after.ref;
 
             const [userData, _] = await getUserData(current.userId);
-
             const [product, productRef] = await getProductInfo(current.externalProductId);
-
             await saveItemData(current, docRef, product, userData);
 
+
+            const currentId: string = change.after.id;
             await updateProductCounters(db, current.externalProductId);
+            await updatePostCounters(db, change.after.id);
 
-            if(JSON.stringify(prev) !== JSON.stringify(current))
-            {
+            await updatePostFieldsInCollection('postedItemLikes', current, currentId);
 
-                const currentId: string = change.after.ref.id;
-                await updatePostFieldsInCollection('postedItemLikes', current, currentId);
-            }
         }
         catch (e) {
             functions.logger.error(e.message)
         }
     })
 
-const updateRecommendationFieldsInCollection = async(collectionName: string, recommendationData: any, recommendationId: string) => {
-
-    const batchArray = [];
-    batchArray.push(db.batch());
-    let operationCounter = 0;
-    let batchIndex = 0;
-
-    const snapshot = await db.collection(collectionName).where('recommendationId', '==', recommendationId).get();
-    snapshot.forEach(documentSnapshot => {
-        if(!documentSnapshot.exists) return;
-
-        const dataToUpdate = {
-            recommendationRate: recommendationData.rate,
-            recommendationTile: recommendationData.title,
-            recommendationSubtitle: recommendationData.subtitle,
-            recommendationDetails: recommendationData.details
-        }
-
-        batchArray[batchIndex].update(documentSnapshot.ref, dataToUpdate);
-        operationCounter++;
-
-        if (operationCounter === 499) {
-            batchArray.push(db.batch());
-            batchIndex++;
-            operationCounter = 0;
-        }
-    });
-    await Promise.all(batchArray.map(batch => batch.commit()))
-    //batchArray.forEach(async batch => await batch.commit());
-}
-
 export const onRecommendationUpdate = functions.firestore
     .document('recommendations/{recommendationId}')
-    .onWrite(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
+    .onUpdate(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
         try{
+
+
             const current = change.after.data();
             const prev = change.before.data();
+            if(JSON.stringify(prev) === JSON.stringify(current))
+            {
+                functions.logger.error("Shouldn't do anything when data is not updated");
+                return;
+            }
 
             const docRef = change.after.ref;
+            const currentId: string = change.after.id;
+
+            await updateProductCounters(db, current.externalProductId);
+            await updateRecommendationCounters(db, change.after.id);
+            await updateUserCounters(db, current.userId);
 
             const [userData, _] = await getUserData(current.userId);
-
             const [product, productRef] = await getProductInfo(current.externalProductId);
-
             await saveItemData(current, docRef, product, userData);
 
-            if(JSON.stringify(prev) !== JSON.stringify(current))
-            {
-                const currentId: string = change.after.ref.id;
-                await updateRecommendationFieldsInCollection('recommendedItemLikes', current, currentId);
-            }
+            await updatePostFieldsInCollection('recommendedItemLikes', current, currentId);
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -727,14 +626,23 @@ export const onRecommendationCreate = functions.firestore
     .onCreate(async (change: QueryDocumentSnapshot, context: EventContext) => {
         try{
             let docData = change.data();
+            const docRef = change.ref;
+            const currentId: string = docRef.id;
 
-            let [userData, userRef] = await getUserData(docData.userId as string);
-            userData = {
-                ...userData,
-                clout: userData.clout + ADD_RECOMMENDATION_CLOUT_POINTS || ADD_RECOMMENDATION_CLOUT_POINTS,
-                dateUpdated: admin.firestore.FieldValue.serverTimestamp()
-            }
-            userRef.set(userData, {merge: true});
+            //Update counters
+            await updateUserCounters(db, docData.userId);
+            await updateProductCounters(db, docData.externalProductId);
+            await updateRecommendationCounters(db, currentId);
+
+
+            //save all data
+            const [userData, _] = await getUserData(docData.userId);
+            const [product, productRef] = await getProductInfo(docData.externalProductId);
+            await saveItemData(docData, docRef, product, userData);
+
+            //propagate data changes
+            await updatePostFieldsInCollection('recommendedItemLikes', docData, currentId);
+
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -746,15 +654,10 @@ export const onRecommendationDelete = functions.firestore
     .onDelete(async (snapshot: QueryDocumentSnapshot, context: EventContext) =>{
         try{
             let docData = snapshot.data();
+            await updateUserCounters(db, docData.userId);
 
-            let [userData, userRef] = await getUserData(docData.userId);
-            userData = {
-                ...userData,
-                clout: userData.clout - ADD_RECOMMENDATION_CLOUT_POINTS || 0,
-                dateUpdated: admin.firestore.FieldValue.serverTimestamp()
-            }
-            userRef.set(userData, {merge: true});
-
+            await deleteAllLikesForRecommendation(db, snapshot.id);
+            //TODO: delete recommendation likes as well
         }
         catch (e) {
             functions.logger.error(e.message)
@@ -822,30 +725,42 @@ export const onActivityCreated = functions.firestore
             }
 
             await docRef.set(docData, {merge: true});
-
-            //TODO: give clout on activity
-
         }
         catch (e) {
             functions.logger.error(e.message)
         }
     })
 
-
-export const onActivityDelete = functions.firestore
-    .document('activityItems/{activityId}')
-    .onDelete(async (snapshot: QueryDocumentSnapshot, context: EventContext) =>{
-        try{
-            let docData = snapshot.data();
-
-            //const [userData, userRef] = await getUserData(docData.fromUserId);
-            //TODO:
-            //userData.clout = userData.clout + ;
-            //userRef.set(userData, {merge: true});
-
-        }
-        catch (e) {
-            functions.logger.error(e.message)
-        }
-    })
-
+// import { Twilio } from 'twilio';
+// const client = new Twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+//
+// export const sendRegCode = functions.https.onCall(async (data, context) => {
+//     try
+//     {
+//         // Message text passed from the client.
+//         const to = data.to;
+//         const codeText = data.code;
+//
+//         const message = await client.messages
+//             .create({
+//                 body: codeText,
+//                 from: '+14158549371',
+//                 to: to
+//             });
+//
+//         functions.logger.info("Sucess: " + codeText + " to " + to, {structuredData: true});
+//         functions.logger.info(message.sid, {structuredData: true})
+//
+//         return {
+//             result: "success"
+//         };
+//     } catch (e) {
+//
+//         functions.logger.error("Could not send SMS to user ");
+//         functions.logger.error(e.message);
+//
+//         return {
+//             result: "failure"
+//         };
+//     }
+// });
